@@ -1,0 +1,3 @@
+^ Vehicle Type ^ Performance ^ Drivability ^
+| Sedan | 0.4 | 0.4 |
+| Phaeton | 0.1 | 0.3 |

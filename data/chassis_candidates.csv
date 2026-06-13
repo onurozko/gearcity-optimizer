@@ -1,0 +1,7 @@
+name,comfort,performance,strength,durability,overall,unit_cost,design_cost,weight,max_engine_width,max_engine_length,notes
+Cheap Ladder Chassis,12,8,35,32,26,300,5000,180,28,36,cheap strong early chassis
+Balanced Sedan Chassis,24,18,38,36,34,420,7000,165,30,38,balanced early passenger chassis
+Light Phaeton Chassis,18,16,20,24,25,260,4500,120,24,32,light cheap early chassis
+Sporty Roadster Chassis,14,44,22,20,36,520,9000,130,26,34,performance focused chassis
+Workhorse Truck Chassis,10,10,55,52,40,650,10000,240,34,42,strong truck chassis
+Comfort Luxury Chassis,48,22,42,38,44,900,15000,190,32,40,comfort and safety focused chassis

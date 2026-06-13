@@ -1,0 +1,7 @@
+name,horsepower,torque,fuel_economy,reliability,smoothness,overall,unit_cost,design_cost,weight,width,length,notes
+Tiny Cheap Single,8,28,42,38,22,28,220,4000,120,18,24,cheap low power engine
+Balanced Early Two,14,42,38,42,34,36,340,6500,150,22,28,balanced early engine
+Torquey Work Engine,18,80,22,45,24,38,520,8500,190,28,34,torque focused utility engine
+Smooth Luxury Engine,16,45,30,44,52,42,700,12000,175,26,32,smooth expensive engine
+Sporty Early Engine,28,55,20,32,26,44,780,13000,165,24,30,performance focused engine
+Efficient Reliable Engine,12,36,55,52,32,40,460,9000,145,21,27,fuel and reliability focused engine

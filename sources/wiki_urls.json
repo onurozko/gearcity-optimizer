@@ -1,0 +1,27 @@
+[
+  {
+    "name": "vehicle_type_importance",
+    "url": "https://wiki.gearcity.info/doku.php?id=gamemanual:references_vehicletypeimportance",
+    "purpose": "Vehicle type importance weights"
+  },
+  {
+    "name": "chassis_game_mechanics",
+    "url": "https://wiki.gearcity.info/doku.php?id=gamemanual:gm_chassis_design",
+    "purpose": "Chassis formulas, sliders, specs, ratings, costs"
+  },
+  {
+    "name": "engine_game_mechanics",
+    "url": "https://wiki.gearcity.info/doku.php?id=gamemanual:gm_engines_design",
+    "purpose": "Engine formulas, sliders, specs, ratings, costs"
+  },
+  {
+    "name": "gearbox_game_mechanics",
+    "url": "https://wiki.gearcity.info/doku.php?id=gamemanual:gm_gearboxes_design",
+    "purpose": "Gearbox formulas, sliders, specs, ratings, costs"
+  },
+  {
+    "name": "dynamic_reports",
+    "url": "https://wiki.gearcity.info/doku.php?id=gamemanual:gui_dynamicreports",
+    "purpose": "Buyer rating and dynamic report formulas"
+  }
+]

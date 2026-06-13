@@ -1,0 +1,7 @@
+name,vehicle_type,performance,drivability,luxury,safety,fuel,power,cargo,dependability,quality,overall,unit_cost,design_cost,sale_price,top_speed_kph,engine_torque,gearbox_max_torque,engine_smoothness,notes
+Cheap Early Sedan,Sedan,12,18,8,24,35,10,22,32,28,24,720,14000,1100,45,38,55,30,cheap practical 1901 sedan
+Balanced Early Sedan,Sedan,18,26,18,38,40,20,32,42,38,36,860,18000,1300,52,42,60,36,balanced sedan
+Overbuilt Fancy Sedan,Sedan,28,30,55,35,20,32,32,28,40,42,2000,32000,4500,58,50,35,22,expensive fancy sedan with weak gearbox
+Cheap Phaeton,Phaeton,8,18,6,22,32,6,12,28,24,22,600,10000,900,38,32,45,28,cheap early phaeton
+Sporty Roadster,Roadster,45,50,8,12,20,38,8,20,30,35,950,22000,1600,70,48,65,24,sporty early roadster
+Workhorse Pickup,Pickup Truck,18,12,6,10,8,45,55,50,34,36,1100,21000,1700,42,80,95,20,cargo and power focused pickup

@@ -1,0 +1,31 @@
+vehicle_type,performance,drivability,luxury,safety,fuel,power,cargo,dependability,wealth_demo,military_fleet,civilian_fleet
+Compact Car,0.2,0.45,0.35,0.5,0.75,0.1,0.4,0.75,2,False,True
+Compact Sport Utility,0.3,0.4,0.1,0.3,0.1,0.4,0.35,0.6,3,True,True
+Compact Van,0.1,0.45,0.15,0.1,0.5,0.35,0.85,0.5,2,False,True
+Coupe,0.7,0.65,0.25,0.25,0.35,0.3,0.2,0.35,5,False,True
+Coupe 2+2,0.65,0.55,0.35,0.3,0.4,0.35,0.25,0.35,4,False,True
+Coupe Utility,0.45,0.4,0.2,0.1,0.15,0.75,0.75,0.65,4,False,True
+Crossover,0.3,0.25,0.5,0.7,0.5,0.3,0.65,0.5,4,False,True
+Fastback,0.7,0.65,0.35,0.15,0.25,0.4,0.3,0.4,5,False,False
+Full Sized Sedan,0.3,0.25,0.65,0.7,0.55,0.6,0.65,0.4,5,False,True
+Hatchback,0.3,0.6,0.4,0.5,0.65,0.2,0.5,0.7,3,False,True
+Landaulet,0.2,0.15,0.9,0.5,0.05,0.3,0.7,0.35,7,False,False
+Limousine,0.15,0.15,0.8,0.5,0.05,0.3,0.75,0.4,7,False,True
+Luxury Sedan,0.55,0.5,0.9,0.75,0.35,0.6,0.68,0.7,6,False,True
+Microcar,0.05,0.5,0.125,0.1,0.9,0.05,0.1,0.65,1,False,False
+Microvan,0.1,0.5,0.2,0.1,0.55,0.3,0.85,0.5,2,False,True
+Minivan,0.1,0.25,0.55,0.85,0.55,0.15,0.8,0.45,3,False,True
+Phaeton,0.1,0.3,0.1,0.5,0.45,0.05,0.2,0.5,1,False,True
+Pickup Truck,0.4,0.15,0.15,0.05,0.05,0.9,0.95,0.8,3,True,True
+Roadster,0.7,0.9,0.05,0.1,0.25,0.25,0.2,0.3,5,False,False
+Roadster 2+2,0.65,0.85,0.15,0.15,0.3,0.3,0.25,0.35,4,False,False
+Sedan,0.4,0.4,0.45,0.65,0.65,0.45,0.5,0.45,4,False,True
+Shooting Brake,0.2,0.15,0.5,0.7,0.35,0.3,0.75,0.5,4,False,True
+Sports,0.9,0.85,0.1,0.1,0.05,0.8,0.1,0.35,5,False,False
+Sport Utility Vehicle,0.25,0.15,0.5,0.75,0.25,0.8,0.6,0.4,3,True,True
+Station Wagon,0.25,0.15,0.55,0.75,0.6,0.3,0.75,0.5,3,False,False
+Subcompact,0.1,0.4,0.35,0.7,0.9,0.1,0.3,0.8,1,False,True
+Supercar,1,1,0.01,0.01,0.01,1,0.01,0.05,7,False,False
+Touring,0.5,0.75,0.5,0.3,0.4,0.5,0.4,0.4,3,False,False
+Town Car,0.15,0.15,0.8,0.5,0.15,0.4,0.6,0.4,5,False,True
+Van,0.05,0.1,0.05,0.05,0.05,0.7,0.95,0.7,3,True,True

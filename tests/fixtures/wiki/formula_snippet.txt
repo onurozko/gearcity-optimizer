@@ -1,0 +1,9 @@
+====== Comfort Rating ======
+Comfort_Rating = Slider_Comfort * 0.8
+if Selected_Chassis_Comfort > 0:
+    Comfort_Rating = Comfort_Rating + Selected_Chassis_Comfort
+else
+    Comfort_Rating = Comfort_Rating * 0.5
+
+====== Buyer Rating ======
+Current Buyer Rating = Vehicle Type Rating + Quality to Price penalty

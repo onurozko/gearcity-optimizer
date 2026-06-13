@@ -1,0 +1,26 @@
+====== Gearbox Game Mechanics ======
+
+===== Specs =====
+
+==== Maximum Torque Support ====
+
+Values are in lb-ft.
+
+<code cpp>
+Max_Torque_Support = 10 * Number_Of_Gears + 75 * (ex_1d0225p_year99)
+Max_Torque_Support = Max_Torque_Support + (Marq_DesignGearboxSkill/5.0)
+</code>
+
+==== Weight ====
+
+<code cpp>
+Weight = 20 + 15*(Number_Of_Gears+Has_Reverse)
+</code>
+
+===== Ratings =====
+
+==== Power Rating ====
+
+<code cpp>
+Power_Rating = 100*(Max_Torque_Support/(80 + 150 * (ex_1d0225p_year99)))
+</code>

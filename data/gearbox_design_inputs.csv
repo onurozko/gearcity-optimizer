@@ -1,0 +1,6 @@
+name,year,number_of_gears,has_limited_slip,has_overdrive,has_transaxle,has_reverse,low_gear_ratio,high_gear_ratio,torque_max_input,tech_material,tech_components,tech_technology,tech_techniques,design_ease,design_dependability,design_fuel_economy,design_performance,subcomponent_weight,subcomponent_complexity,subcomponent_smoothness,subcomponent_ease,subcomponent_fuel_rating,subcomponent_performance_rating,subcomponent_unit_costs,subcomponent_design_costs,marque_design_gearbox_skill,pre_research_gearbox_amount_effect
+Cheap 2 Speed Formula,1901,2,False,False,False,True,0.55,0.45,0.20,0.20,0.25,0.20,0.20,0.25,0.30,0.25,0.15,0.35,0.30,0.20,0.25,0.30,0.15,1.0,1.0,0,0
+Balanced 3 Speed Formula,1901,3,False,False,False,True,0.50,0.50,0.35,0.35,0.35,0.30,0.30,0.35,0.40,0.35,0.30,0.40,0.35,0.30,0.35,0.35,0.30,1.0,1.0,5,0
+Heavy Duty 3 Speed Formula,1901,3,False,False,False,True,0.40,0.35,0.65,0.40,0.45,0.30,0.35,0.25,0.55,0.20,0.25,0.55,0.55,0.25,0.25,0.20,0.25,1.0,1.0,8,0
+Sport 3 Speed Formula,1901,3,True,False,False,True,0.25,0.60,0.50,0.40,0.40,0.45,0.40,0.30,0.35,0.20,0.65,0.35,0.40,0.30,0.30,0.20,0.55,1.0,1.0,10,0
+Efficient 3 Speed Formula,1901,3,False,True,False,True,0.60,0.55,0.30,0.45,0.40,0.40,0.35,0.35,0.45,0.70,0.20,0.30,0.30,0.35,0.40,0.55,0.20,1.0,1.0,6,0

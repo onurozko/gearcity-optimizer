@@ -1,0 +1,7 @@
+name,power,fuel_economy,performance,reliability,comfort,overall,unit_cost,design_cost,max_torque,weight,gears,notes
+Cheap 2 Speed,18,28,12,36,20,26,120,2500,45,70,2,cheap simple gearbox
+Balanced 3 Speed,32,34,28,42,30,36,220,4500,65,85,3,balanced early gearbox
+Heavy Duty 3 Speed,55,20,24,48,22,40,340,6500,105,120,3,strong reliable gearbox
+Sport 3 Speed,38,22,48,30,24,38,360,7000,70,90,3,performance gearing
+Comfort 3 Speed,30,32,24,40,48,39,420,8000,65,95,3,smoother premium gearbox
+Efficient 3 Speed,28,50,22,44,28,40,300,6500,60,80,3,fuel economy focused gearbox
