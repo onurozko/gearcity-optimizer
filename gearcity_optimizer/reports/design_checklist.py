@@ -5,25 +5,27 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from gearcity_optimizer.core.component_priorities import (
-    RATING_NAMES,
     calculate_component_priorities,
+    enrich_priorities_for_display,
     format_stat_label,
     get_adjusted_vehicle_weights,
 )
 from gearcity_optimizer.core.component_models import ComponentPriority
 from gearcity_optimizer.core.models import VehicleType
+from gearcity_optimizer.core.terminology import (
+    DESIGN_SLIDER_SECTION_TITLE,
+    FINAL_VEHICLE_RATING_SECTION_TITLE,
+    VEHICLE_TYPE_RATING_KEYS,
+    format_final_vehicle_rating_label,
+    format_final_vehicle_rating_line,
+    format_quality_universal_line,
+)
 
-FINAL_STAT_LABELS: dict[str, str] = {
-    "performance": "Performance",
-    "drivability": "Drivability",
-    "luxury": "Luxury",
-    "safety": "Safety",
-    "fuel": "Fuel economy",
-    "power": "Power / torque",
-    "cargo": "Cargo / utility",
-    "dependability": "Dependability",
-    "quality": "Quality",
-}
+DEPENDABILITY_HEAVY_GUIDANCE = (
+    "Final vehicle dependability matters for this vehicle type. Support it "
+    "through reliable engine choices, durable chassis choices, reliable gearbox "
+    "choices, dependability focus, material quality, and reliability testing."
+)
 
 CHASSIS_STAT_BULLETS: dict[str, str] = {
     "strength": (
@@ -31,10 +33,12 @@ CHASSIS_STAT_BULLETS: dict[str, str] = {
         "and safety-related structure."
     ),
     "durability": (
-        "Prioritize durability and dependable suspension/frame choices."
+        "Prioritize Chassis Durability Rating, but remember this is a "
+        "component-level stat, not the final Vehicle Dependability Rating "
+        "by itself."
     ),
     "comfort": (
-        "Prioritize comfort and control, especially for luxury or "
+        "Prioritize Comfort Rating and control, especially for luxury or "
         "family-oriented models."
     ),
     "performance": (
@@ -65,11 +69,11 @@ ENGINE_STAT_BULLETS: dict[str, str] = {
         "Prioritize horsepower and performance-focused tuning."
     ),
     "reliability": (
-        "Prioritize reliability/dependability and avoid overly complex "
-        "engine choices."
+        "Prioritize Engine Reliability Rating when final vehicle dependability "
+        "matters."
     ),
     "smoothness": (
-        "Prioritize engine smoothness for luxury/drivability-sensitive vehicles."
+        "Prioritize engine smoothness for luxury/driveability-sensitive vehicles."
     ),
     "compact_size": (
         "Keep engine size reasonable so it fits the chassis and preserves "
@@ -82,21 +86,22 @@ ENGINE_STAT_BULLETS: dict[str, str] = {
 
 GEARBOX_STAT_BULLETS: dict[str, str] = {
     "max_torque": (
-        "Gearbox max torque must exceed engine torque; otherwise "
-        "quality/dependability can suffer."
+        "Make sure max torque supports engine torque; torque mismatch can hurt "
+        "quality/dependability."
     ),
     "fuel_economy": (
         "Prioritize fuel economy gearing and efficient gearbox design."
     ),
     "reliability": (
-        "Prioritize gearbox reliability and dependable/simple design."
+        "Prioritize Gearbox Reliability Rating and make sure max torque supports "
+        "engine torque; torque mismatch can hurt quality/dependability."
     ),
     "performance": (
         "Prioritize performance gearing for acceleration/top speed."
     ),
     "comfort": (
-        "Prioritize shifting ease/comfort for luxury or drivability-sensitive "
-        "models."
+        "Prioritize Gearbox Comfort Rating, influenced by shifting ease/smoothness "
+        "variables."
     ),
     "low_weight": (
         "Keep gearbox weight reasonable when fuel economy matters."
@@ -105,7 +110,9 @@ GEARBOX_STAT_BULLETS: dict[str, str] = {
 
 VEHICLE_DESIGN_BULLETS: dict[str, str] = {
     "safety_focus": "Raise Design Focus: Safety.",
-    "dependability_focus": "Raise Design Focus: Dependability.",
+    "dependability_focus": (
+        "Raise Design Focus: Dependability (supports final vehicle dependability)."
+    ),
     "cargo_focus": "Raise Design Focus: Cargo.",
     "luxury_focus": "Raise Design Focus: Luxury.",
     "style_focus": "Raise Design Focus: Style (secondary luxury/performance cue).",
@@ -167,24 +174,50 @@ def _is_component_stat_high(item: ComponentPriority, rank: int) -> bool:
 def _top_final_stat_priorities(
     weights: dict[str, float],
 ) -> list[tuple[str, float]]:
-    """Sort final vehicle stats by adjusted importance weight."""
+    """Sort vehicle-type final stats by adjusted importance weight."""
     return sorted(
-        ((name, weights[name]) for name in RATING_NAMES if name in weights),
+        ((name, weights[name]) for name in VEHICLE_TYPE_RATING_KEYS if name in weights),
         key=lambda item: item[1],
         reverse=True,
     )
+
+
+def _final_stat_label(stat: str) -> str:
+    """Return a GearCity-aligned label for a final vehicle stat."""
+    return format_final_vehicle_rating_label(stat)
+
+
+def format_final_vehicle_rating_priorities(
+    weights: dict[str, float],
+    *,
+    include_stars: bool = False,
+) -> list[str]:
+    """Build display lines for final vehicle rating priorities plus quality note."""
+    lines: list[str] = []
+    for index, (stat, value) in enumerate(_top_final_stat_priorities(weights), start=1):
+        lines.append(
+            format_final_vehicle_rating_line(
+                stat,
+                value,
+                include_stars=include_stars,
+                numbered=index,
+            )
+        )
+    if "quality" in weights:
+        lines.append(format_quality_universal_line(weights["quality"], include_stars=include_stars))
+    return lines
 
 
 def _format_final_priority_summary(priorities: list[tuple[str, float]]) -> list[str]:
     """Build a short numbered summary of the most important final stats."""
     lines: list[str] = []
     for index, (stat, value) in enumerate(priorities[:5], start=1):
-        label = FINAL_STAT_LABELS.get(stat, stat.replace("_", " ").title())
+        label = _final_stat_label(stat)
         level = weight_level(value)
         lines.append(f"{index}. {label} ({level}, {value:.2f})")
 
     moderate = [
-        FINAL_STAT_LABELS.get(stat, stat)
+        _final_stat_label(stat)
         for stat, value in priorities[5:8]
         if value >= 0.35
     ]
@@ -193,6 +226,16 @@ def _format_final_priority_summary(priorities: list[tuple[str, float]]) -> list[
             f"{len(lines) + 1}. {', '.join(moderate)} moderate"
         )
     return lines
+
+
+def format_final_vehicle_rating_priorities_from_vehicle_type(
+    vehicle_type: VehicleType,
+    *,
+    include_stars: bool = False,
+) -> list[str]:
+    """Build final vehicle rating priority lines for a vehicle type."""
+    weights = get_adjusted_vehicle_weights(vehicle_type)
+    return format_final_vehicle_rating_priorities(weights, include_stars=include_stars)
 
 
 def _chassis_bullets(
@@ -284,10 +327,15 @@ def _gearbox_bullets(
 
 def _vehicle_design_bullets(
     design_priorities: list[ComponentPriority],
+    weights: dict[str, float],
 ) -> list[str]:
     """Build vehicle body/design/testing checklist bullets."""
     bullets: list[str] = []
     seen: set[str] = set()
+
+    if _weight(weights, "dependability") >= 0.60:
+        bullets.append(DEPENDABILITY_HEAVY_GUIDANCE)
+        seen.add(DEPENDABILITY_HEAVY_GUIDANCE)
 
     for rank, item in enumerate(design_priorities, start=1):
         if not _is_component_stat_high(item, rank):
@@ -335,15 +383,22 @@ def _things_to_avoid(weights: dict[str, float]) -> list[str]:
     return warnings
 
 
+def format_checklist_final_stat_label(stat: str) -> str:
+    """Return a layer-aware label for a final vehicle stat in checklists."""
+    return _final_stat_label(stat)
+
+
 def render_design_checklist_markdown(report: DesignChecklistReport) -> str:
     """Render a design checklist report as Markdown."""
     lines = [
         f"# {report.vehicle_type} Design Checklist, {report.year}",
         "",
-        "## Most important final vehicle stats",
+        f"Selected vehicle type: **{report.vehicle_type}**",
+        "",
+        f"## {FINAL_VEHICLE_RATING_SECTION_TITLE}",
         "",
     ]
-    for line in _format_final_priority_summary(report.final_stat_priorities):
+    for line in format_final_vehicle_rating_priorities(_weights_from_report(report)):
         lines.append(line)
     lines.append("")
 
@@ -362,6 +417,15 @@ def render_design_checklist_markdown(report: DesignChecklistReport) -> str:
         lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _weights_from_report(report: DesignChecklistReport) -> dict[str, float]:
+    """Reconstruct weight dict from report final priorities plus quality default."""
+    from gearcity_optimizer.core.component_priorities import QUALITY_BACKGROUND_WEIGHT
+
+    weights = dict(report.final_stat_priorities)
+    weights["quality"] = QUALITY_BACKGROUND_WEIGHT
+    return weights
 
 
 def build_design_checklist(
@@ -387,8 +451,8 @@ def build_design_checklist(
             bullets=_gearbox_bullets(priorities["gearbox"], weights),
         ),
         DesignChecklistSection(
-            title="Vehicle body / design focus",
-            bullets=_vehicle_design_bullets(priorities["vehicle_design"]),
+            title=DESIGN_SLIDER_SECTION_TITLE,
+            bullets=_vehicle_design_bullets(priorities["vehicle_design"], weights),
         ),
     ]
 
@@ -410,10 +474,12 @@ def format_checklist_for_cli(report: DesignChecklistReport) -> str:
     lines = [
         f"{report.vehicle_type} Design Checklist, {report.year}",
         "",
-        "Most important final vehicle stats:",
+        f"Selected vehicle type: {report.vehicle_type}",
+        "",
+        f"{FINAL_VEHICLE_RATING_SECTION_TITLE}:",
         "",
     ]
-    lines.extend(_format_final_priority_summary(report.final_stat_priorities))
+    lines.extend(format_final_vehicle_rating_priorities(_weights_from_report(report)))
     lines.append("")
 
     for section in report.sections:
@@ -434,8 +500,9 @@ def format_priority_table(
     component: str,
 ) -> list[str]:
     """Format ranked component priorities for display."""
+    display_priorities = enrich_priorities_for_display(component, priorities)
     lines: list[str] = []
-    for index, item in enumerate(priorities, start=1):
+    for index, item in enumerate(display_priorities, start=1):
         label = format_stat_label(component, item.stat)
         lines.append(f"  {index}. {label} ({item.priority:.1f})")
     return lines

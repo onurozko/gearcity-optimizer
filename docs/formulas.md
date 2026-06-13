@@ -14,6 +14,36 @@ project does not claim ownership over GearCity formulas or wiki text.
 The MIT license applies to this project's source code only, not to GearCity or
 GearCity Wiki content.
 
+## Rating layers
+
+GearCity uses several related but different rating concepts. This project keeps
+them separate on purpose:
+
+- **Component formula pages** (chassis, engine, gearbox game mechanics) calculate
+  component stats such as engine reliability, chassis durability, and gearbox
+  reliability.
+- **Vehicle Game Mechanics** combines assembled components into **final vehicle
+  stats** such as `Rating_Drivability`, `Rating_Dependability`, `Rating_Quality`,
+  and `Rating_Overall`.
+- **Vehicle type importance weights** (from `vehicle_types.csv` and the vehicle
+  type importance wiki page) decide how much each final vehicle stat matters for
+  buyers of that vehicle class.
+- **Dynamic Reports / buyer rating** uses final vehicle stats plus company,
+  branch, price, and market factors.
+
+Therefore **engine reliability**, **chassis durability**, and **gearbox
+reliability** are related to but not identical to **final vehicle
+dependability**. Component overall ratings and final vehicle overall ratings are
+broad summaries and should not be treated as dependability either.
+
+The GearCity wiki formulas use `Driveability` / `Rating_Drivability` for the
+final vehicle stat. Chassis steering/handling subcomponent values feed into this
+rating. Some in-game screens may display Handling, but this tool uses Driveability
+as the formula-backed label.
+
+See `gearcity_optimizer/core/terminology.py` for the terminology and layer
+mappings used in the Streamlit UI.
+
 ## Implemented formula modules
 
 | Module | Wiki source | Purpose |
@@ -21,7 +51,7 @@ GearCity Wiki content.
 | `formulas/chassis_formula.py` | Chassis Game Mechanics | Dimensions, ratings, requirements |
 | `formulas/engine_formula.py` | Engine Game Mechanics | Horsepower, torque, ratings, requirements |
 | `formulas/gearbox_formula.py` | Gearbox Game Mechanics | Torque support, weight, ratings, requirements |
-| `formulas/vehicle_assembly_formula.py` | Dynamic Reports (partial) | Combine components into vehicle ratings for package scoring |
+| `formulas/vehicle_assembly_formula.py` | Vehicle Game Mechanics (partial), Dynamic Reports (partial) | Combine components into final vehicle ratings for package scoring |
 
 ## Data sources
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -121,6 +122,78 @@ def test_build_formula_index_from_gearbox_raw_page():
 
     assert len(index["gearbox_game_mechanics"]) >= 1
     assert "Maximum Torque Support" in index["gearbox_game_mechanics"]
+
+
+def test_build_formula_index_from_vehicle_game_mechanics_page():
+    """Formula index builder should include vehicle game mechanics sections."""
+    raw = (FIXTURES / "vehicle_game_mechanics_sample.txt").read_text(encoding="utf-8")
+    parsed = parse_raw_content(raw)
+    parsed["name"] = "vehicle_game_mechanics"
+    index = build_formula_index({"vehicle_game_mechanics": parsed})
+
+    assert "vehicle_game_mechanics" in index
+    sections = index["vehicle_game_mechanics"]
+    assert "Dependability Rating" in sections
+    assert "Rating_Dependability" in sections["Dependability Rating"]
+    assert "Driveability Rating" in sections or "Drivability Rating" in sections
+
+
+def test_import_wiki_parses_vehicle_game_mechanics(tmp_path: Path):
+    """import-wiki should parse a cached vehicle_game_mechanics raw page."""
+    from gearcity_optimizer.importers.wiki_parser import import_wiki_pages
+
+    fixture = (FIXTURES / "vehicle_game_mechanics_sample.txt").read_text(encoding="utf-8")
+    raw_dir = tmp_path / "sources" / "wiki_raw"
+    raw_dir.mkdir(parents=True)
+    (raw_dir / "vehicle_game_mechanics.txt").write_text(fixture, encoding="utf-8")
+
+    urls_file = tmp_path / "sources" / "wiki_urls.json"
+    urls_file.parent.mkdir(parents=True, exist_ok=True)
+    urls_file.write_text(
+        json.dumps(
+            [
+                {
+                    "name": "vehicle_game_mechanics",
+                    "url": "https://wiki.gearcity.info/doku.php?id=gamemanual:gm_vehicles_design",
+                    "purpose": "Final vehicle formulas",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    summary = import_wiki_pages(
+        urls_file=urls_file,
+        raw_dir=raw_dir,
+        text_dir=tmp_path / "sources" / "wiki_text",
+        html_dir=tmp_path / "sources" / "wiki_html",
+        output_dir=tmp_path / "generated" / "raw_parsed",
+        normalized_dir=tmp_path / "generated" / "normalized",
+        existing_vehicle_types_csv=tmp_path / "data" / "vehicle_types.csv",
+    )
+
+    assert summary["missing_sources"] == []
+    assert len(summary["parsed"]) == 1
+    assert summary["parsed"][0]["name"] == "vehicle_game_mechanics"
+    assert "vehicle_game_mechanics" in summary["formula_index_counts"]
+    assert summary["formula_index_counts"]["vehicle_game_mechanics"] >= 1
+
+    parsed_json = tmp_path / "generated" / "raw_parsed" / "wiki_vehicle_game_mechanics.json"
+    assert parsed_json.is_file()
+    data = json.loads(parsed_json.read_text(encoding="utf-8"))
+    assert data["name"] == "vehicle_game_mechanics"
+    assert "Rating_Dependability" in json.dumps(data["formula_sections"])
+
+
+def test_wiki_urls_contains_vehicle_game_mechanics():
+    """Configured wiki URLs should include vehicle game mechanics."""
+    urls_path = Path(__file__).resolve().parent.parent / "sources" / "wiki_urls.json"
+    entries = json.loads(urls_path.read_text(encoding="utf-8"))
+    names = {entry["name"] for entry in entries}
+    assert "vehicle_game_mechanics" in names
+    vehicle_entry = next(entry for entry in entries if entry["name"] == "vehicle_game_mechanics")
+    assert "gm_vehicles_design" in vehicle_entry["url"]
+    assert "dependability" in vehicle_entry["purpose"].lower()
 
 
 def test_is_wiki_page_json_excludes_metadata_files():

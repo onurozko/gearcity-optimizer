@@ -55,7 +55,30 @@ design input CSVs (data/*_design_inputs.csv)
 ```
 
 Assembly scoring (`vehicle_assembly_formula.py`) combines component stats into
-vehicle ratings for formula-backed package ranking.
+final vehicle ratings for formula-backed package ranking.
+
+## Rating layers
+
+GearCity terminology spans several layers that must not be collapsed:
+
+1. **Component stats** from chassis, engine, and gearbox formula pages (for
+   example engine reliability, chassis durability, gearbox comfort).
+2. **Final vehicle stats** from Vehicle Game Mechanics (for example
+   `Rating_Drivability`, `Rating_Dependability`, `Rating_Quality`,
+   `Rating_Overall`).
+3. **Vehicle type importance weights** from the vehicle type table (how much
+   buyers of a class care about each final stat).
+4. **Buyer rating** from dynamic reports (final stats weighted with company,
+   branch, price, and market factors).
+
+Component reliability/durability feeds final vehicle dependability but is not the
+same stat. See `gearcity_optimizer/core/terminology.py` and the terminology
+audit CLI for evidence-backed mappings.
+
+The GearCity wiki formulas use `Driveability` / `Rating_Drivability` for the
+final vehicle stat. Chassis steering/handling subcomponent values feed into this
+rating. Some in-game screens may display Handling, but this tool uses Driveability
+as the formula-backed label.
 
 ## Wiki pipeline
 

@@ -20,6 +20,11 @@
     "purpose": "Gearbox formulas, sliders, specs, ratings, costs"
   },
   {
+    "name": "vehicle_game_mechanics",
+    "url": "https://wiki.gearcity.info/doku.php?id=gamemanual:gm_vehicles_design&s[]=dependability",
+    "purpose": "Final vehicle formulas, vehicle ratings, dependability, quality, overall, and how components feed assembled vehicle stats"
+  },
+  {
     "name": "dynamic_reports",
     "url": "https://wiki.gearcity.info/doku.php?id=gamemanual:gui_dynamicreports",
     "purpose": "Buyer rating and dynamic report formulas"

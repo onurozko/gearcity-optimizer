@@ -88,6 +88,8 @@ def test_luxury_sedan_priorities_favor_comfort_smoothness():
 
 
 def test_format_stat_label_readable():
-    """Stat labels should be human-readable."""
-    assert format_stat_label("engine", "fuel_economy") == "Fuel economy"
-    assert format_stat_label("vehicle_design", "testing_fuel") == "Testing fuel"
+    """Stat labels should use terminology-aware display labels."""
+    assert format_stat_label("engine", "fuel_economy") == "Fuel Economy Rating"
+    assert format_stat_label("engine", "reliability") == "Engine Reliability Rating"
+    assert format_stat_label("vehicle_design", "testing_fuel") == "Testing: Fuel Economy"
+    assert "Durability Rating" in format_stat_label("chassis", "durability")

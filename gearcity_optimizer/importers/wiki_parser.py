@@ -470,6 +470,7 @@ def build_formula_index(parsed_pages: dict[str, dict[str, Any]]) -> dict[str, di
         "chassis_game_mechanics",
         "engine_game_mechanics",
         "gearbox_game_mechanics",
+        "vehicle_game_mechanics",
         "dynamic_reports",
     )
     index: dict[str, dict[str, str]] = {}

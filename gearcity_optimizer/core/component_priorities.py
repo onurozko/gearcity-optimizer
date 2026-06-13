@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from gearcity_optimizer.core.component_models import ComponentPriority
 from gearcity_optimizer.core.models import VehicleType
+from gearcity_optimizer.core.terminology import format_priority_label
 
 RATING_NAMES = (
     "performance",
@@ -95,10 +96,10 @@ COMPONENT_INFLUENCE = {
 
 STAT_LABELS: dict[str, dict[str, str]] = {
     "chassis": {
-        "comfort": "Comfort",
-        "performance": "Performance",
-        "strength": "Strength",
-        "durability": "Durability",
+        "comfort": "Comfort Rating",
+        "performance": "Performance Rating",
+        "strength": "Strength Rating",
+        "durability": "Durability Rating",
         "low_weight": "Low weight",
         "engine_fit_room": "Engine fit room",
         "cargo_space": "Cargo space",
@@ -106,31 +107,33 @@ STAT_LABELS: dict[str, dict[str, str]] = {
     "engine": {
         "horsepower": "Horsepower",
         "torque": "Torque",
-        "fuel_economy": "Fuel economy",
-        "reliability": "Reliability",
-        "smoothness": "Smoothness",
+        "power_rating": "Power Rating",
+        "fuel_economy": "Fuel Economy Rating",
+        "reliability": "Reliability Rating",
+        "smoothness": "Smoothness Rating",
         "low_weight": "Low weight",
         "compact_size": "Compact size",
     },
     "gearbox": {
-        "max_torque": "Max torque",
-        "fuel_economy": "Fuel economy",
-        "performance": "Performance",
-        "reliability": "Reliability",
-        "comfort": "Comfort",
+        "max_torque": "Maximum Torque Support",
+        "power": "Power Rating",
+        "fuel_economy": "Fuel Economy Rating",
+        "performance": "Performance Rating",
+        "reliability": "Reliability Rating",
+        "comfort": "Comfort Rating",
         "low_weight": "Low weight",
     },
     "vehicle_design": {
-        "safety_focus": "Safety focus",
-        "dependability_focus": "Dependability focus",
-        "cargo_focus": "Cargo focus",
-        "luxury_focus": "Luxury focus",
-        "style_focus": "Style focus",
-        "material_quality": "Material quality",
-        "testing_reliability": "Testing reliability",
-        "testing_fuel": "Testing fuel",
-        "testing_performance": "Testing performance",
-        "testing_utility": "Testing utility",
+        "safety_focus": "Design Focus: Safety",
+        "dependability_focus": "Design Focus: Dependability",
+        "cargo_focus": "Design Focus: Cargo",
+        "luxury_focus": "Design Focus: Luxury",
+        "style_focus": "Design Focus: Style",
+        "material_quality": "Materials: Material Quality",
+        "testing_reliability": "Testing: Reliability",
+        "testing_fuel": "Testing: Fuel Economy",
+        "testing_performance": "Testing: Performance",
+        "testing_utility": "Testing: Utility",
     },
 }
 
@@ -245,6 +248,47 @@ def calculate_component_priorities(
 
 def format_stat_label(component: str, stat: str) -> str:
     """Return a human-readable label for a component stat key."""
-    return STAT_LABELS.get(component, {}).get(
-        stat, stat.replace("_", " ").title()
+    return format_priority_label(component, stat)
+
+
+def enrich_engine_priorities_for_display(
+    priorities: list[ComponentPriority],
+) -> list[ComponentPriority]:
+    """
+    Add a display-only engine Power Rating row derived from horsepower/torque.
+
+    Does not affect priority calculations or formula scoring.
+    """
+    horsepower = next((item for item in priorities if item.stat == "horsepower"), None)
+    torque = next((item for item in priorities if item.stat == "torque"), None)
+    if horsepower is None and torque is None:
+        return priorities
+
+    pseudo_priority = max(
+        horsepower.priority if horsepower else 0.0,
+        torque.priority if torque else 0.0,
     )
+    enriched = list(priorities)
+    enriched.append(
+        ComponentPriority(
+            component="engine",
+            stat="power_rating",
+            priority=pseudo_priority,
+            reasons=[
+                "Display-only: max(horsepower, torque) priority; "
+                "Power Rating is a separate GearCity rating."
+            ],
+        )
+    )
+    enriched.sort(key=lambda item: item.priority, reverse=True)
+    return enriched
+
+
+def enrich_priorities_for_display(
+    component: str,
+    priorities: list[ComponentPriority],
+) -> list[ComponentPriority]:
+    """Apply display-only enrichments without changing calculated priorities."""
+    if component == "engine":
+        return enrich_engine_priorities_for_display(priorities)
+    return priorities

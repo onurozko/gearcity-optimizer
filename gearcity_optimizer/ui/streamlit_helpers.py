@@ -9,6 +9,19 @@ import streamlit as st
 
 from gearcity_optimizer.core.component_priorities import calculate_component_priorities
 from gearcity_optimizer.core.models import VehicleType
+from gearcity_optimizer.core.terminology import (
+    DEPENDABILITY_LAYERS_MARKDOWN,
+    DEPENDABILITY_LAYER_NOTE,
+    DESIGN_SLIDER_SECTION_TITLE,
+    DRIVEABILITY_HANDLING_NOTE,
+    ENGINE_POWER_NOTE,
+    FINAL_VEHICLE_RATING_SECTION_TITLE,
+    GEARBOX_COMFORT_NOTE,
+    HOW_TO_READ_PRIORITIES_MARKDOWN,
+    TERMINOLOGY_AUDIT_CLI_HINT,
+    list_terminology_audit_rows,
+    list_terminology_layers,
+)
 from gearcity_optimizer.core.vehicle_types import load_vehicle_types
 from gearcity_optimizer.data_sources import project_root as repo_root
 from gearcity_optimizer.formula_browser import (
@@ -18,8 +31,13 @@ from gearcity_optimizer.formula_browser import (
 from gearcity_optimizer.reports.design_checklist import (
     DesignChecklistReport,
     build_design_checklist,
+    format_final_vehicle_rating_priorities_from_vehicle_type,
     format_priority_table,
     render_design_checklist_markdown,
+)
+from gearcity_optimizer.reports.naming_guide import (
+    MISSING_NAMING_GUIDE_MESSAGE,
+    load_naming_guide_markdown,
 )
 
 
@@ -141,11 +159,18 @@ def render_app() -> None:
     report = st.session_state.checklist_report
     priorities = component_priority_lines(vehicle_type)
     wiki = wiki_status()
+    final_rating_lines = format_final_vehicle_rating_priorities_from_vehicle_type(
+        vehicle_type,
+        include_stars=True,
+    )
 
-    tab_checklist, tab_priorities, tab_wiki, tab_packages = st.tabs(
+    st.markdown(f"### Selected vehicle type: **{vehicle_type_name}**")
+
+    tab_checklist, tab_priorities, tab_naming, tab_wiki, tab_packages = st.tabs(
         [
             "Design Checklist",
             "Component Priorities",
+            "Naming Guide",
             "Wiki / Formula Tools",
             "Package Optimizer",
         ]
@@ -154,16 +179,11 @@ def render_app() -> None:
     with tab_checklist:
         st.subheader(f"{report.vehicle_type} Design Checklist, {report.year}")
 
-        st.markdown("### Most important final vehicle stats")
-        for stat, value in report.final_stat_priorities[:8]:
-            label = stat.replace("_", " ").title()
-            if stat == "fuel":
-                label = "Fuel economy"
-            elif stat == "power":
-                label = "Power / torque"
-            elif stat == "cargo":
-                label = "Cargo / utility"
-            st.write(f"- **{label}**: {value:.2f}")
+        st.markdown(f"## {FINAL_VEHICLE_RATING_SECTION_TITLE}")
+        for line in final_rating_lines:
+            st.write(line)
+
+        st.divider()
 
         for section in report.sections:
             st.markdown(f"### {section.title}")
@@ -185,22 +205,119 @@ def render_app() -> None:
         )
 
     with tab_priorities:
-        st.subheader("Component priorities")
-        cols = st.columns(2)
-        with cols[0]:
-            st.markdown("**Chassis**")
-            for line in priorities["chassis"]:
-                st.text(line)
-            st.markdown("**Engine**")
-            for line in priorities["engine"]:
-                st.text(line)
-        with cols[1]:
-            st.markdown("**Gearbox**")
-            for line in priorities["gearbox"]:
-                st.text(line)
-            st.markdown("**Vehicle design**")
-            for line in priorities["vehicle_design"]:
-                st.text(line)
+        st.subheader("Priorities and terminology")
+
+        st.markdown(f"## {FINAL_VEHICLE_RATING_SECTION_TITLE}")
+        st.caption(
+            "Formula-backed final vehicle stats for the selected vehicle type. "
+            "Matches the in-game New Car Design overview importance list."
+        )
+        for line in final_rating_lines:
+            st.write(line)
+
+        with st.expander("How to read these priorities"):
+            st.markdown(HOW_TO_READ_PRIORITIES_MARKDOWN)
+
+        st.divider()
+
+        st.markdown("## Component Priorities")
+        st.caption(
+            "Translate final vehicle needs into chassis, engine, and gearbox focus "
+            "areas. Labels follow GearCity Wiki formula names."
+        )
+
+        st.markdown("### Chassis")
+        for line in priorities["chassis"]:
+            st.text(line)
+
+        st.markdown("")
+        st.markdown("### Engine")
+        for line in priorities["engine"]:
+            st.text(line)
+        st.caption(ENGINE_POWER_NOTE)
+
+        st.markdown("")
+        st.markdown("### Gearbox")
+        for line in priorities["gearbox"]:
+            st.text(line)
+        st.caption(GEARBOX_COMFORT_NOTE)
+
+        st.divider()
+
+        st.markdown(f"## {DESIGN_SLIDER_SECTION_TITLE}")
+        st.caption(
+            "Design focus sliders, testing sliders, and material quality. "
+            "Not the same as final vehicle rating importance above."
+        )
+        for line in priorities["vehicle_design"]:
+            st.text(line)
+
+        st.divider()
+
+        st.markdown("## Terminology Notes / Audit")
+
+        with st.expander("Terminology notes", expanded=True):
+            st.markdown(DRIVEABILITY_HANDLING_NOTE)
+            st.markdown("")
+            st.markdown(DEPENDABILITY_LAYER_NOTE)
+            st.markdown("")
+            st.markdown(GEARBOX_COMFORT_NOTE)
+            st.markdown("")
+            st.markdown(ENGINE_POWER_NOTE)
+            st.markdown("")
+            st.markdown(
+                "- Labels are based on GearCity Wiki formula names where available.\n"
+                "- Some in-game screens may use different labels.\n"
+                "- Mappings marked with uncertain status in the audit table are not "
+                "confirmed as exact UI matches."
+            )
+
+        with st.expander("Dependability / reliability / durability layers"):
+            st.markdown(DEPENDABILITY_LAYERS_MARKDOWN)
+            for layer in list_terminology_layers():
+                st.markdown(f"**{layer.name}** ({layer.level})")
+                st.caption(layer.description)
+                if layer.related_but_not_same_as:
+                    st.caption(
+                        "Related but not the same as: "
+                        + ", ".join(layer.related_but_not_same_as)
+                    )
+
+        with st.expander("Terminology Audit"):
+            st.caption(TERMINOLOGY_AUDIT_CLI_HINT)
+            audit_rows = list_terminology_audit_rows()
+            st.dataframe(
+                audit_rows,
+                use_container_width=True,
+                hide_index=True,
+            )
+            drivability_entry = next(
+                (
+                    row
+                    for row in audit_rows
+                    if row["internal key"] == "drivability"
+                    and row["component"] == "vehicle"
+                ),
+                None,
+            )
+            if drivability_entry:
+                st.markdown("**Driveability vs Handling**")
+                st.markdown(f"Status: `{drivability_entry['status']}`")
+                st.markdown(drivability_entry["explanation"])
+
+    with tab_naming:
+        st.subheader("GearCity Component Naming Standard")
+        naming_guide = load_naming_guide_markdown()
+        if naming_guide is None:
+            st.warning(MISSING_NAMING_GUIDE_MESSAGE)
+        else:
+            st.markdown(naming_guide)
+            st.download_button(
+                "Download naming guide as Markdown",
+                data=naming_guide,
+                file_name="component_naming_standard.md",
+                mime="text/markdown",
+            )
 
     with tab_wiki:
         st.subheader("Wiki / formula tools")

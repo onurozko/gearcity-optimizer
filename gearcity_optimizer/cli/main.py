@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -81,24 +82,35 @@ from gearcity_optimizer.reports.advisor import (
     explain_component_priorities,
     explain_package,
 )
+from gearcity_optimizer.core.terminology import (
+    DESIGN_SLIDER_SECTION_TITLE,
+    FINAL_VEHICLE_RATING_SECTION_TITLE,
+    format_audit_entry_text,
+    get_verified_terminology_entry,
+    list_terminology_entries,
+)
+from gearcity_optimizer.core.terminology_verification import verify_term_search
 from gearcity_optimizer.reports.design_checklist import (
     build_design_checklist,
     format_checklist_for_cli,
+    format_final_vehicle_rating_priorities,
 )
 
 SUBCOMMANDS = {
-    "rank-designs",
-    "priorities",
+    "run-app",
+    "setup-sources",
     "design-checklist",
+    "priorities",
+    "rank-designs",
     "packages",
     "download-wiki",
     "import-wiki",
     "inspect-sources",
-    "setup-sources",
     "formulas",
     "calc-gearboxes",
     "calc-chassis",
     "calc-engines",
+    "terminology-audit",
 }
 
 UNKNOWN_SUBCOMMAND = "__unknown__"
@@ -223,28 +235,18 @@ def handle_priorities(args: argparse.Namespace) -> int:
     adjusted = get_adjusted_vehicle_weights(vehicle_type)
     priorities = calculate_component_priorities(vehicle_type)
 
-    print(f"\nVehicle Type: {vehicle_type.name}\n")
-    print("Adjusted vehicle priorities:")
-    display_order = [
-        "safety",
-        "fuel",
-        "cargo",
-        "dependability",
-        "luxury",
-        "power",
-        "performance",
-        "drivability",
-        "quality",
-    ]
-    for rating in display_order:
-        if rating in adjusted:
-            print(f"  {rating}: {adjusted[rating]:.2f}")
+    print(f"\nSelected vehicle type: {vehicle_type.name}\n")
+    print(f"{FINAL_VEHICLE_RATING_SECTION_TITLE}:")
+    for line in format_final_vehicle_rating_priorities(adjusted):
+        print(f"  {line}")
 
     _print_priority_section("Chassis focus", priorities["chassis"], "chassis")
     _print_priority_section("Engine focus", priorities["engine"], "engine")
     _print_priority_section("Gearbox focus", priorities["gearbox"], "gearbox")
     _print_priority_section(
-        "Vehicle design focus", priorities["vehicle_design"], "vehicle_design"
+        DESIGN_SLIDER_SECTION_TITLE,
+        priorities["vehicle_design"],
+        "vehicle_design",
     )
 
     print("\n--- Advisor comments ---\n")
@@ -442,6 +444,12 @@ def handle_download_wiki(args: argparse.Namespace) -> int:
         print("\nFailures:")
         for name, errors in failures:
             print(f"  {name}: {'; '.join(errors)}")
+        print(
+            "\nWiki download failed for one or more pages. "
+            "Check your network connection and retry:"
+        )
+        print("  gearcity-optimizer setup-sources")
+        return 1
     print(
         "\nManifest:",
         _default_data_path("generated/raw_parsed/wiki_download_manifest.json"),
@@ -460,6 +468,17 @@ def handle_import_wiki(args: argparse.Namespace) -> int:
     print("GearCity Wiki import complete.\n")
     if summary["missing_sources"]:
         print("Missing cached sources:", ", ".join(summary["missing_sources"]))
+        print(
+            "\nWiki import failed because cached source files are missing. "
+            "Run download-wiki first, or retry:"
+        )
+        print("  gearcity-optimizer setup-sources")
+        return 1
+
+    if not summary["parsed"]:
+        print("No wiki pages were parsed.")
+        print("  gearcity-optimizer setup-sources")
+        return 1
 
     for page in summary["parsed"]:
         print(
@@ -490,16 +509,59 @@ def handle_import_wiki(args: argparse.Namespace) -> int:
 
 def handle_setup_sources(args: argparse.Namespace) -> int:
     """Download, import, and inspect wiki sources (fresh-clone helper)."""
-    print("Setting up local wiki cache and generated parser outputs...\n")
+    print("GearCity Optimizer source setup\n")
+
+    print("Step 1/3: Downloading configured GearCity Wiki pages...")
     result = handle_download_wiki(args)
     if result != 0:
+        print("\nSetup failed during wiki download.")
         return result
     print()
+
+    print("Step 2/3: Importing/parsing wiki pages...")
     result = handle_import_wiki(args)
     if result != 0:
+        print("\nSetup failed during wiki import.")
         return result
     print()
-    return handle_inspect_sources(args)
+
+    print("Step 3/3: Inspecting local source cache...")
+    result = handle_inspect_sources(args)
+    if result != 0:
+        print("\nSetup failed during source inspection.")
+        return result
+
+    print("\nSetup complete. Wiki cache and parser outputs are ready.")
+    print("Start the UI with: gearcity-optimizer run-app")
+    return 0
+
+
+def build_streamlit_run_command(
+    *,
+    app_path: Path | None = None,
+    root: Path | None = None,
+) -> list[str]:
+    """Build the subprocess command used by run-app."""
+    base = root or project_root_from_module()
+    app = app_path or (base / "streamlit_app.py")
+    return [sys.executable, "-m", "streamlit", "run", str(app)]
+
+
+def handle_run_app(args: argparse.Namespace) -> int:
+    """Launch the Streamlit design checklist UI."""
+    try:
+        import streamlit  # noqa: F401
+    except ImportError:
+        print("Streamlit is not installed. Run:")
+        print("  pip install -e .")
+        print("or")
+        print("  pip install -e '.[dev]'")
+        return 1
+
+    cmd = build_streamlit_run_command()
+    print("Starting GearCity Vehicle Design Helper...")
+    print(" ".join(cmd))
+    return subprocess.call(cmd)
 
 
 def _print_vehicle_type_changes(comparison: dict) -> None:
@@ -826,28 +888,84 @@ def handle_calc_engines(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_terminology_audit(args: argparse.Namespace) -> int:
+    """Search or list evidence-backed terminology mappings."""
+    if args.term:
+        evidence, note = verify_term_search(args.term, full=args.full)
+        print(f"\nTerm search: {args.term}\n")
+        print(note)
+        print("")
+        if not evidence:
+            return 0
+        for item in evidence:
+            print(f"  * [{item.source_type}] {item.source_file}")
+            print(f"    matched: {item.matched_text!r}")
+            print(f"    context: {item.context}")
+            print("")
+        lowered = args.term.lower()
+        if lowered in {"handling", "drivability", "driveability"}:
+            entry = get_verified_terminology_entry("vehicle", "drivability")
+            print(format_audit_entry_text(entry, full=args.full))
+        return 0
+
+    entries = list_terminology_entries()
+    print(f"\nTerminology audit ({len(entries)} entries)\n")
+    for entry in entries:
+        if args.full:
+            print(format_audit_entry_text(entry, full=True))
+        else:
+            mapping = entry.formula_label
+            if entry.observed_game_label:
+                mapping = f"{entry.formula_label} vs {entry.observed_game_label}"
+            print(
+                f"- [{entry.component}.{entry.internal_key}] {mapping} "
+                f"-> {entry.display_label} ({entry.status}, "
+                f"{len(entry.evidence)} evidence)"
+            )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the CLI argument parser and all subcommand parsers."""
     parser = argparse.ArgumentParser(
-        description="GearCity vehicle design optimizer and component advisor."
+        description="GearCity vehicle design helper and component advisor.",
+        epilog=(
+            "Main workflow:\n"
+            "  run-app           Start the Streamlit design checklist UI\n"
+            "  setup-sources     Download and parse wiki references (fresh clone)\n"
+            "  design-checklist  Print a practical vehicle design checklist\n"
+            "  priorities        Show component stat priorities for a vehicle type\n"
+            "\n"
+            "Fresh clone: pip install -e \".[dev]\" && gearcity-optimizer setup-sources\n"
+            "Daily use:   gearcity-optimizer run-app"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     subparsers = parser.add_subparsers(dest="command")
 
-    rank_parser = subparsers.add_parser(
-        "rank-designs",
-        help="Rank finished vehicle designs (default mode)",
+    run_app_parser = subparsers.add_parser(
+        "run-app",
+        help="Start the Streamlit design checklist UI",
     )
-    priorities_parser = subparsers.add_parser(
-        "priorities",
-        help="Show component stat priorities for a vehicle type",
+    setup_sources_parser = subparsers.add_parser(
+        "setup-sources",
+        help="Download, import, and inspect wiki sources (fresh-clone setup)",
     )
     design_checklist_parser = subparsers.add_parser(
         "design-checklist",
         help="Show a practical vehicle design checklist for a vehicle type",
     )
+    priorities_parser = subparsers.add_parser(
+        "priorities",
+        help="Show component stat priorities for a vehicle type",
+    )
     packages_parser = subparsers.add_parser(
         "packages",
         help="Rank chassis + engine + gearbox combinations",
+    )
+    rank_parser = subparsers.add_parser(
+        "rank-designs",
+        help="Rank finished vehicle designs (default mode)",
     )
     download_wiki_parser = subparsers.add_parser(
         "download-wiki",
@@ -860,10 +978,6 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_sources_parser = subparsers.add_parser(
         "inspect-sources",
         help="Inspect downloaded and parsed wiki sources",
-    )
-    setup_sources_parser = subparsers.add_parser(
-        "setup-sources",
-        help="Download, import, and inspect wiki sources (fresh-clone helper)",
     )
     formulas_parser = subparsers.add_parser(
         "formulas",
@@ -1068,6 +1182,25 @@ def build_parser() -> argparse.ArgumentParser:
         "calc-engines",
         help="Calculate engine specs and ratings from wiki formulas",
     )
+    terminology_audit_parser = subparsers.add_parser(
+        "terminology-audit",
+        help="Audit terminology mappings against local wiki sources",
+    )
+    terminology_audit_parser.add_argument(
+        "--term",
+        default=None,
+        help="Search one term in local wiki sources",
+    )
+    terminology_audit_parser.add_argument(
+        "--all",
+        action="store_true",
+        help="List all known terminology entries (default when --term omitted)",
+    )
+    terminology_audit_parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Show full evidence context",
+    )
     calc_engines_parser.add_argument(
         "--input-file",
         default=_default_data_path("data/engine_design_inputs.csv"),
@@ -1086,6 +1219,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser._cli_parsers = {
+        "run_app": run_app_parser,
         "rank": rank_parser,
         "priorities": priorities_parser,
         "design_checklist": design_checklist_parser,
@@ -1098,6 +1232,7 @@ def build_parser() -> argparse.ArgumentParser:
         "calc_gearboxes": calc_gearboxes_parser,
         "calc_chassis": calc_chassis_parser,
         "calc_engines": calc_engines_parser,
+        "terminology_audit": terminology_audit_parser,
     }
     return parser
 
@@ -1109,6 +1244,7 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = build_parser()
     cli_parsers = parser._cli_parsers
+    run_app_parser = cli_parsers["run_app"]
     rank_parser = cli_parsers["rank"]
     priorities_parser = cli_parsers["priorities"]
     design_checklist_parser = cli_parsers["design_checklist"]
@@ -1121,6 +1257,7 @@ def main(argv: list[str] | None = None) -> int:
     calc_gearboxes_parser = cli_parsers["calc_gearboxes"]
     calc_chassis_parser = cli_parsers["calc_chassis"]
     calc_engines_parser = cli_parsers["calc_engines"]
+    terminology_audit_parser = cli_parsers["terminology_audit"]
 
     if subcommand == UNKNOWN_SUBCOMMAND:
         print(f"Unknown command: {raw_argv[0]!r}")
@@ -1132,9 +1269,17 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if subcommand is None:
+        if not remaining or any(arg in ("-h", "--help") for arg in remaining):
+            parser.print_help()
+            return 0
         rank_parser.set_defaults(func=handle_rank_designs)
         args = rank_parser.parse_args(remaining)
         return handle_rank_designs(args)
+
+    if subcommand == "run-app":
+        run_app_parser.set_defaults(func=handle_run_app)
+        args = run_app_parser.parse_args(remaining)
+        return handle_run_app(args)
 
     if subcommand == "rank-designs":
         rank_parser.set_defaults(func=handle_rank_designs)
@@ -1195,6 +1340,11 @@ def main(argv: list[str] | None = None) -> int:
         calc_engines_parser.set_defaults(func=handle_calc_engines)
         args = calc_engines_parser.parse_args(remaining)
         return handle_calc_engines(args)
+
+    if subcommand == "terminology-audit":
+        terminology_audit_parser.set_defaults(func=handle_terminology_audit)
+        args = terminology_audit_parser.parse_args(remaining)
+        return handle_terminology_audit(args)
 
     parser.print_help()
     return 1

@@ -1,0 +1,80 @@
+====== Vehicle Game Mechanics ======
+
+===== Ratings ======
+
+==== Performance Rating ====
+
+<code cpp>
+Rating_Performance = Selected_Engine.Performance_Rating * 0.5
+Rating_Performance = Rating_Performance + Selected_Chassis.Performance_Rating * 0.3
+</code>
+
+==== Driveability Rating ====
+
+<code cpp>
+Rating_Drivability = Selected_Chassis.Drivability_Rating * 0.4
+Rating_Drivability = Rating_Drivability + SubComponent_FrSus_Steering * 0.1
+Rating_Drivability = Rating_Drivability + SubComponent_RrSus_Steering * 0.1
+Rating_Drivability = Rating_Drivability + Selected_Gearbox.Comfort_Rating * 0.2
+</code>
+
+==== Luxury Rating ====
+
+<code cpp>
+Rating_Luxury = Selected_Chassis.Comfort_Rating * 0.5
+</code>
+
+==== Safety Rating ====
+
+<code cpp>
+Rating_Safety = Selected_Chassis.Strength_Rating * 0.6
+</code>
+
+==== Dependability Rating ====
+
+<code cpp>
+Rating_Dependability = Selected_Chassis.Durability_Rating * 0.35
+Rating_Dependability = Rating_Dependability + Selected_Engine.Reliability_Rating * 0.35
+Rating_Dependability = Rating_Dependability + Selected_Gearbox.Reliability_Rating * 0.2
+Rating_Dependability = Rating_Dependability + Sliders_Design_Dependability * 0.1
+</code>
+
+==== Quality Rating ====
+
+<code cpp>
+Rating_Quality = Selected_Chassis.Durability_Rating * 0.25
+Rating_Quality = Rating_Quality + Selected_Engine.Reliability_Rating * 0.25
+Rating_Quality = Rating_Quality + Selected_Gearbox.Reliability_Rating * 0.25
+</code>
+
+==== Overall Rating ====
+
+<code cpp>
+Rating_Overall = Rating_Performance + Rating_Drivability + Rating_Luxury
+Rating_Overall = Rating_Overall + Rating_Safety + Rating_Dependability
+</code>
+
+==== Cargo Rating ====
+
+<code cpp>
+Rating_Cargo = Selected_Chassis.Cargo_Space * 0.8
+</code>
+
+==== Fuel Economy Rating ====
+
+<code cpp>
+Rating_Fuel = Selected_Engine.Fuel_Economy_Rating * 0.6
+Rating_Fuel = Rating_Fuel + Selected_Gearbox.Fuel_Economy_Rating * 0.4
+</code>
+
+==== Power Rating ====
+
+<code cpp>
+Rating_Power = Selected_Engine.HP * 0.5
+Rating_Power = Rating_Power + Selected_Engine.Torque * 0.05
+</code>
+
+==== Vehicle Type Rating ====
+
+Vehicle Type Rating uses vehicle type importance weights for performance, drivability,
+luxury, safety, fuel, power, cargo, and dependability.

@@ -66,7 +66,7 @@ def test_roadster_checklist_mentions_performance_drivability_horsepower():
     """Roadster checklist should emphasize performance and drivability."""
     text = _report_text("Roadster")
     assert "performance" in text
-    assert "drivability" in text
+    assert "driveability" in text
     assert "horsepower" in text
 
 
@@ -83,12 +83,37 @@ def test_markdown_renderer_includes_major_sections():
     report = build_design_checklist(_load_type("Sedan"))
     markdown = render_design_checklist_markdown(report)
 
-    assert "## Most important final vehicle stats" in markdown
+    assert "## Final vehicle rating priorities" in markdown
+    assert "Driveability" in markdown
+    assert "Handling / Drivability" not in markdown
     assert "## Chassis focus" in markdown
     assert "## Engine focus" in markdown
     assert "## Gearbox focus" in markdown
-    assert "## Vehicle body / design focus" in markdown
+    assert "## Design sliders & testing focus" in markdown
     assert "## Things to avoid" in markdown
+    assert "Selected vehicle type:" in markdown
+
+
+def test_sedan_checklist_final_ratings_and_slider_labels():
+    """Sedan checklist should separate final ratings from design slider guidance."""
+    report = build_design_checklist(_load_type("Sedan"))
+    markdown = render_design_checklist_markdown(report)
+
+    assert "Final vehicle rating priorities" in markdown
+    assert "Design sliders & testing focus" in markdown
+    assert "Design Focus:" in markdown or "Testing:" in markdown
+    assert "universal buyer-rating factor" in markdown.lower()
+
+
+def test_sedan_slider_labels_use_prefixes():
+    """Design slider priority labels should include Design Focus or Testing prefixes."""
+    from gearcity_optimizer.core.component_priorities import format_stat_label
+
+    assert format_stat_label("vehicle_design", "safety_focus") == "Design Focus: Safety"
+    assert format_stat_label("vehicle_design", "testing_fuel") == "Testing: Fuel Economy"
+    assert format_stat_label("vehicle_design", "material_quality") == (
+        "Materials: Material Quality"
+    )
 
 
 def test_cli_design_checklist_runs_without_crashing(capsys):

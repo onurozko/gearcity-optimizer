@@ -13,7 +13,7 @@ from gearcity_optimizer.core.models import (
 
 ATTRIBUTE_LABELS = {
     "performance": "Performance",
-    "drivability": "Drivability",
+    "drivability": "Driveability",
     "luxury": "Luxury",
     "safety": "Safety",
     "fuel": "Fuel economy",

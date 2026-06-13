@@ -48,6 +48,7 @@ ratings and game-mechanics references into practical design guidance.
 - [Chassis Game Mechanics](https://wiki.gearcity.info/doku.php?id=gamemanual:gm_chassis_design)
 - [Engine Game Mechanics](https://wiki.gearcity.info/doku.php?id=gamemanual:gm_engines_design)
 - [Gearbox Game Mechanics](https://wiki.gearcity.info/doku.php?id=gamemanual:gm_gearboxes_design)
+- [Vehicle Game Mechanics](https://wiki.gearcity.info/doku.php?id=gamemanual:gm_vehicles_design)
 - [Dynamic Reports](https://wiki.gearcity.info/doku.php?id=gamemanual:gui_dynamicreports)
 
 ## What it does
@@ -73,6 +74,51 @@ ratings and game-mechanics references into practical design guidance.
 pip install -e ".[dev]"
 ```
 
+## One-line setup
+
+For most users on Windows PowerShell:
+
+```powershell
+pip install -e ".[dev]"; gearcity-optimizer setup-sources; gearcity-optimizer run-app
+```
+
+This:
+
+- Installs the project in editable mode (includes dev tools such as pytest)
+- Downloads and parses configured GearCity Wiki references
+- Starts the Streamlit design checklist UI
+
+On Bash/macOS/Linux, chain commands with `&&` instead of `;`:
+
+```bash
+pip install -e ".[dev]" && gearcity-optimizer setup-sources && gearcity-optimizer run-app
+```
+
+## Minimal setup
+
+For users who only want the checklist/UI without wiki formula tools:
+
+```powershell
+pip install -e ".[dev]"; gearcity-optimizer run-app
+```
+
+- The main checklist works from committed `data/vehicle_types.csv`
+- Wiki/formula tools need `gearcity-optimizer setup-sources` first
+
+## Daily use
+
+After the first setup, start the UI with:
+
+```powershell
+gearcity-optimizer run-app
+```
+
+Or:
+
+```bash
+python -m gearcity_optimizer.cli run-app
+```
+
 ## Fresh clone setup
 
 A new clone includes:
@@ -94,23 +140,23 @@ Main checklist usage works immediately after install:
 
 ```bash
 pip install -e ".[dev]"
-python -m gearcity_optimizer.cli priorities --vehicle-type Sedan
-python -m gearcity_optimizer.cli design-checklist --vehicle-type Sedan --year 1901
-streamlit run streamlit_app.py
+gearcity-optimizer priorities --vehicle-type Sedan
+gearcity-optimizer design-checklist --vehicle-type Sedan --year 1901
+gearcity-optimizer run-app
 ```
 
 Wiki and formula tools require local regeneration:
 
 ```bash
-python -m gearcity_optimizer.cli download-wiki
-python -m gearcity_optimizer.cli import-wiki
-python -m gearcity_optimizer.cli inspect-sources
+gearcity-optimizer download-wiki
+gearcity-optimizer import-wiki
+gearcity-optimizer inspect-sources
 ```
 
-Or use the convenience bootstrap command:
+Or use the convenience bootstrap command (all three steps):
 
 ```bash
-python -m gearcity_optimizer.cli setup-sources
+gearcity-optimizer setup-sources
 ```
 
 - `download-wiki` recreates local wiki cache folders under `sources/`.
@@ -119,12 +165,24 @@ python -m gearcity_optimizer.cli setup-sources
 - You can safely delete `generated/` and rerun `import-wiki` (after wiki cache
   exists) to rebuild parser outputs.
 
+## Component Naming Guide
+
+The Streamlit UI includes a **Naming Guide** tab with a compact naming standard for
+internal GearCity components. It covers engine, chassis, and gearbox naming formats,
+role codes, fuel codes, and examples.
+
+Markdown source:
+
+```text
+docs/component_naming_standard.md
+```
+
 ## Main usage
 
 ```bash
-python -m gearcity_optimizer.cli priorities --vehicle-type Sedan
-python -m gearcity_optimizer.cli design-checklist --vehicle-type Sedan --year 1901
-streamlit run streamlit_app.py
+gearcity-optimizer priorities --vehicle-type Sedan
+gearcity-optimizer design-checklist --vehicle-type Sedan --year 1901
+gearcity-optimizer run-app
 ```
 
 Save a checklist as Markdown:
