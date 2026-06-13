@@ -35,7 +35,7 @@ def explain_candidate(
     """
     Generate human-readable comments about a candidate's fit and trade-offs.
 
-    Rule-based only — no LLM involvement.
+    Rule-based only; no LLM involvement.
     """
     comments: list[str] = []
 
@@ -193,7 +193,7 @@ def explain_package(
                 comments.append(
                     f"{', '.join(strong_attrs[:2]).lower()} is strong, but "
                     f"{vehicle_type.name} values {', '.join(high_importance[:2]).lower()} "
-                    f"more — watch {', '.join(weak_attrs[:2]).lower()}."
+                    f"more; watch {', '.join(weak_attrs[:2]).lower()}."
                 )
     else:
         comments.append(

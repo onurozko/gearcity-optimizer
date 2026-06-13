@@ -23,9 +23,9 @@ gearcity_optimizer/
 
 Root-level folders:
 
-- `data/` — editable seed/sample CSV inputs
-- `generated/` — parser output, formula exports, reports (safe to delete)
-- `sources/` — configured source references and local cached wiki downloads
+- `data/`: editable seed/sample CSV inputs
+- `generated/`: parser output, formula exports, reports (safe to delete)
+- `sources/`: configured source references and local cached wiki downloads
 
 `sources/` contains configured source references (`wiki_urls.json`) and local
 cached downloads from the GearCity Wiki. Cached wiki pages under
@@ -71,7 +71,7 @@ modules and browser; it is not a full game simulation.
 
 ## CLI entry points
 
-- `python -m gearcity_optimizer.cli` — module entry (`cli/__main__.py`)
-- `gearcity-optimizer` — console script (`pyproject.toml`)
+- `python -m gearcity_optimizer.cli`: module entry (`cli/__main__.py`)
+- `gearcity-optimizer`: console script (`pyproject.toml`)
 
 Both call `gearcity_optimizer.cli.main.main()`.

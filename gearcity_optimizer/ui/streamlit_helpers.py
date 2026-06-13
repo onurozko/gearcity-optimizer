@@ -219,7 +219,7 @@ def render_app() -> None:
 
     with tab_packages:
         st.subheader("Package optimizer")
-        st.warning("Experimental — advanced tool, not the main workflow.")
+        st.warning("Experimental: advanced tool, not the main workflow.")
         st.write(
             "Use the CLI for package ranking and formula-backed component calculators:"
         )

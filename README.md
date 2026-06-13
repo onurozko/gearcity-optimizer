@@ -179,7 +179,7 @@ gearcity_optimizer/
   data_sources.py
 
 data/             Editable seed/sample CSVs (committed)
-generated/        Generated output — safe to delete/regenerate (gitignored)
+generated/        Generated output; safe to delete/regenerate (gitignored)
 sources/          Wiki URL config and downloaded caches
 streamlit_app.py  Thin Streamlit entry point
 docs/             Architecture and formula notes
@@ -193,7 +193,7 @@ for more detail.
 | Folder | Purpose |
 |--------|---------|
 | `data/` | Editable sample inputs; `vehicle_types.csv` is wiki-derived reference data (see [data/README.md](data/README.md)) |
-| `generated/` | Parser output, formula exports, reports — regenerate anytime (gitignored) |
+| `generated/` | Parser output, formula exports, reports; regenerate anytime (gitignored) |
 | `sources/` | `wiki_urls.json` plus local cached wiki downloads (cache gitignored) |
 
 Do not commit `generated/`, cached wiki files under `sources/wiki_html/`,

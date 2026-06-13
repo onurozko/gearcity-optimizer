@@ -435,7 +435,7 @@ def handle_download_wiki(args: argparse.Namespace) -> int:
     failures = [(r["name"], r["errors"]) for r in results if r.get("errors")]
 
     print("GearCity Wiki download complete.\n")
-    print("Downloaded:", ", ".join(downloaded) if downloaded else "(none — cached)")
+    print("Downloaded:", ", ".join(downloaded) if downloaded else "(none, cached)")
     if skipped:
         print("Skipped (cached):", ", ".join(sorted(set(skipped))))
     if failures:

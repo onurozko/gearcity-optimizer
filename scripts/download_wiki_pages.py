@@ -55,7 +55,7 @@ def main() -> int:
         for name in downloaded:
             print(f"  - {name}")
     else:
-        print("Downloaded: (none — all files cached)")
+        print("Downloaded: (none, all files cached)")
 
     if skipped:
         print("\nSkipped (cached):")

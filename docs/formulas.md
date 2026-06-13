@@ -2,7 +2,7 @@
 
 Formula modules are based on the **GearCity Wiki** game-mechanics pages listed
 in `sources/wiki_urls.json`. The wiki describes these formulas as pseudo-code
-and reference material — useful for understanding mechanics, but not guaranteed
+and reference material. Useful for understanding mechanics, but not guaranteed
 to match the game's internal implementation exactly.
 
 Treat all formula output as planning guidance, not authoritative in-game values.

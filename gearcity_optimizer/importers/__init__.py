@@ -1,1 +1,1 @@
-"""GearCity Wiki importers — download and parse cached wiki pages."""
+"""GearCity Wiki importers: download and parse cached wiki pages."""
