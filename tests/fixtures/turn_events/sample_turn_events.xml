@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Evts>
+    <year y="1900">
+        <turn t="1">
+            <WorldEvts/>
+            <NewsEvts>
+                <comment localization="1" type="1" headline="100000" body="100001" image="PanicOf1901.jpg"/>
+            </NewsEvts>
+            <GameEvts>
+                <buyrate rate="0.94"/>
+                <stockrate rate="0.88"/>
+                <interest global="1.06"/>
+                <gas rate="1.5"/>
+                <carprice rate="1.4"/>
+                <pensionGrowth rate="1.003"/>
+                <vehiclepop selectedIndex="1087" pop="0.99" popR1="0.99" popR2="0.99" popR3="0.99" popR4="0.99" popR5="0.99" popR6="0.99"/>
+            </GameEvts>
+        </turn>
+        <turn t="2">
+            <WorldEvts/>
+            <NewsEvts/>
+            <GameEvts>
+                <buyrate rate="0.96"/>
+                <interest global="1.05"/>
+            </GameEvts>
+        </turn>
+    </year>
+    <year y="1901">
+        <turn t="1">
+            <WorldEvts>
+                <cityChange id="200" Nation="Australia" Flag="Australia1901.dds"/>
+            </WorldEvts>
+            <NewsEvts/>
+            <GameEvts>
+                <buyrate rate="1.02"/>
+                <stockrate rate="1.0"/>
+                <interest global="1.02"/>
+            </GameEvts>
+        </turn>
+    </year>
+</Evts>

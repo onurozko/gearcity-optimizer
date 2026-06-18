@@ -39,6 +39,7 @@ from gearcity_optimizer.reports.naming_guide import (
     MISSING_NAMING_GUIDE_MESSAGE,
     load_naming_guide_markdown,
 )
+from gearcity_optimizer.ui.historical_events import render_historical_events_tab
 
 
 def project_root() -> Path:
@@ -166,13 +167,14 @@ def render_app() -> None:
 
     st.markdown(f"### Selected vehicle type: **{vehicle_type_name}**")
 
-    tab_checklist, tab_priorities, tab_naming, tab_wiki, tab_packages = st.tabs(
+    tab_checklist, tab_priorities, tab_naming, tab_wiki, tab_packages, tab_events = st.tabs(
         [
             "Design Checklist",
             "Component Priorities",
             "Naming Guide",
             "Wiki / Formula Tools",
             "Package Optimizer",
+            "Historical Events / Timeline",
         ]
     )
 
@@ -349,3 +351,6 @@ def render_app() -> None:
             f"{vehicle_type_name} --year {int(year)} --objective formula_fit"
         )
         st.caption("Placeholder tab for future simple package controls.")
+
+    with tab_events:
+        render_historical_events_tab()

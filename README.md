@@ -165,6 +165,23 @@ gearcity-optimizer setup-sources
 - You can safely delete `generated/` and rerun `import-wiki` (after wiki cache
   exists) to rebuild parser outputs.
 
+## Historical events and maps
+
+The app does not bundle GearCity map event files.
+
+To use the Historical Events timeline:
+
+1. Open the Historical Events tab.
+2. Import a `TurnEvents.xml` file from your GearCity map folder.
+3. Give it a map name, such as `Base City Map`.
+4. The app remembers it locally.
+
+Example file path:
+
+`D:\SteamLibrary\steamapps\common\GearCity\media\Maps\Base City Map\scripts\TurnEvents.xml`
+
+Other maps may have their own `TurnEvents.xml`, so import one per map.
+
 ## Component Naming Guide
 
 The Streamlit UI includes a **Naming Guide** tab with a compact naming standard for

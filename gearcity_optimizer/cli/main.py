@@ -77,6 +77,16 @@ from gearcity_optimizer.importers.wiki_parser import (
     import_wiki_pages,
     is_wiki_page_json,
 )
+from gearcity_optimizer.importers.map_sources import (
+    discover_map_sources,
+    import_map_from_path,
+    resolve_map_for_cli,
+)
+from gearcity_optimizer.importers.turn_events_parser import load_turn_events_for_map
+from gearcity_optimizer.reports.danger_periods import (
+    danger_periods_for_map,
+    summarize_timeline,
+)
 from gearcity_optimizer.reports.advisor import (
     explain_candidate,
     explain_component_priorities,
@@ -111,6 +121,10 @@ SUBCOMMANDS = {
     "calc-chassis",
     "calc-engines",
     "terminology-audit",
+    "import-map",
+    "list-maps",
+    "danger-periods",
+    "events-summary",
 }
 
 UNKNOWN_SUBCOMMAND = "__unknown__"
@@ -888,6 +902,74 @@ def handle_calc_engines(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_import_map(args: argparse.Namespace) -> int:
+    """Import a map TurnEvents.xml file into user_data/maps/."""
+    source = import_map_from_path(
+        map_id=args.id,
+        name=args.name,
+        source_path=args.turn_events,
+        description=args.description,
+        overwrite=args.overwrite,
+    )
+    print(f"Imported map {source.id!r} ({source.name})")
+    print(f"Saved TurnEvents.xml to {source.turn_events_file}")
+    return 0
+
+
+def handle_list_maps(args: argparse.Namespace) -> int:
+    """List imported map timelines."""
+    sources = discover_map_sources()
+    if not sources:
+        print("No map timelines imported yet.")
+        print(
+            "Import one with:\n"
+            "  gearcity-optimizer import-map --id base_city "
+            '--name "Base City Map" --turn-events "<path-to-TurnEvents.xml>"'
+        )
+        return 0
+
+    print(f"\nImported maps ({len(sources)})\n")
+    for source in sources:
+        print(f"- {source.id}: {source.name}")
+        print(f"  path: {source.path}")
+        print(f"  turn events: {source.turn_events_file}")
+        print(f"  kind: {source.source_kind}")
+    return 0
+
+
+def handle_danger_periods(args: argparse.Namespace) -> int:
+    """Print map-specific danger periods from imported TurnEvents data."""
+    map_source = resolve_map_for_cli(args.map)
+    periods = danger_periods_for_map(map_source)
+    print(f"\n{map_source.name} danger periods\n")
+    if not periods:
+        print("No elevated danger periods detected.")
+        return 0
+
+    for period in periods:
+        print(
+            f"- {period.start_year} turn {period.start_turn} to "
+            f"{period.end_year} turn {period.end_turn}: "
+            f"{period.label} [{period.danger_type}, {period.severity}]"
+        )
+        print(f"  map: {period.map_name} ({period.map_id})")
+        print(f"  supporting turns: {', '.join(period.supporting_events[:5])}")
+        if len(period.supporting_events) > 5:
+            print(f"  ... and {len(period.supporting_events) - 5} more")
+    return 0
+
+
+def handle_events_summary(args: argparse.Namespace) -> int:
+    """Print a compact summary of one map timeline."""
+    map_source = resolve_map_for_cli(args.map)
+    timeline = load_turn_events_for_map(map_source)
+    summary = summarize_timeline(timeline)
+    print(f"\n{map_source.name} events summary\n")
+    for key, value in summary.items():
+        print(f"- {key}: {value}")
+    return 0
+
+
 def handle_terminology_audit(args: argparse.Namespace) -> int:
     """Search or list evidence-backed terminology mappings."""
     if args.term:
@@ -1218,6 +1300,61 @@ def build_parser() -> argparse.ArgumentParser:
         help="Export package-compatible engine candidates CSV",
     )
 
+    import_map_parser = subparsers.add_parser(
+        "import-map",
+        help="Import a map TurnEvents.xml timeline into user_data/maps/",
+    )
+    import_map_parser.add_argument(
+        "--id",
+        required=True,
+        help="Map id slug (for example base_city)",
+    )
+    import_map_parser.add_argument(
+        "--name",
+        required=True,
+        help='Display name (for example "Base City Map")',
+    )
+    import_map_parser.add_argument(
+        "--turn-events",
+        required=True,
+        help="Path to TurnEvents.xml",
+    )
+    import_map_parser.add_argument(
+        "--description",
+        default="Imported GearCity map timeline.",
+        help="Optional map description for map.json",
+    )
+    import_map_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Replace an existing map with the same id",
+    )
+
+    list_maps_parser = subparsers.add_parser(
+        "list-maps",
+        help="List imported map TurnEvents timelines",
+    )
+
+    danger_periods_parser = subparsers.add_parser(
+        "danger-periods",
+        help="Show map-specific economic danger periods",
+    )
+    danger_periods_parser.add_argument(
+        "--map",
+        default=None,
+        help="Map id (required when multiple maps are imported)",
+    )
+
+    events_summary_parser = subparsers.add_parser(
+        "events-summary",
+        help="Summarize one imported map timeline",
+    )
+    events_summary_parser.add_argument(
+        "--map",
+        default=None,
+        help="Map id (required when multiple maps are imported)",
+    )
+
     parser._cli_parsers = {
         "run_app": run_app_parser,
         "rank": rank_parser,
@@ -1233,6 +1370,10 @@ def build_parser() -> argparse.ArgumentParser:
         "calc_chassis": calc_chassis_parser,
         "calc_engines": calc_engines_parser,
         "terminology_audit": terminology_audit_parser,
+        "import_map": import_map_parser,
+        "list_maps": list_maps_parser,
+        "danger_periods": danger_periods_parser,
+        "events_summary": events_summary_parser,
     }
     return parser
 
@@ -1258,6 +1399,10 @@ def main(argv: list[str] | None = None) -> int:
     calc_chassis_parser = cli_parsers["calc_chassis"]
     calc_engines_parser = cli_parsers["calc_engines"]
     terminology_audit_parser = cli_parsers["terminology_audit"]
+    import_map_parser = cli_parsers["import_map"]
+    list_maps_parser = cli_parsers["list_maps"]
+    danger_periods_parser = cli_parsers["danger_periods"]
+    events_summary_parser = cli_parsers["events_summary"]
 
     if subcommand == UNKNOWN_SUBCOMMAND:
         print(f"Unknown command: {raw_argv[0]!r}")
@@ -1345,6 +1490,26 @@ def main(argv: list[str] | None = None) -> int:
         terminology_audit_parser.set_defaults(func=handle_terminology_audit)
         args = terminology_audit_parser.parse_args(remaining)
         return handle_terminology_audit(args)
+
+    if subcommand == "import-map":
+        import_map_parser.set_defaults(func=handle_import_map)
+        args = import_map_parser.parse_args(remaining)
+        return handle_import_map(args)
+
+    if subcommand == "list-maps":
+        list_maps_parser.set_defaults(func=handle_list_maps)
+        args = list_maps_parser.parse_args(remaining)
+        return handle_list_maps(args)
+
+    if subcommand == "danger-periods":
+        danger_periods_parser.set_defaults(func=handle_danger_periods)
+        args = danger_periods_parser.parse_args(remaining)
+        return handle_danger_periods(args)
+
+    if subcommand == "events-summary":
+        events_summary_parser.set_defaults(func=handle_events_summary)
+        args = events_summary_parser.parse_args(remaining)
+        return handle_events_summary(args)
 
     parser.print_help()
     return 1

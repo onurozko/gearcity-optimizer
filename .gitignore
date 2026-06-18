@@ -38,6 +38,10 @@ sources/wiki_text/
 
 # Local copied game files / user-owned game data
 sources/game_files/
+user_data/
+
+# GearCity map event XML (imported or copied from the game; do not commit)
+**/TurnEvents.xml
 
 # Temporary files
 tmp/
