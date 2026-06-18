@@ -196,3 +196,26 @@ def test_load_turn_events_for_map_uses_metadata(
     timeline = load_turn_events_for_map(map_source)
     assert timeline.map_id == "base_city"
     assert timeline.map_name == "Base City Map"
+
+
+def test_stock_market_timeline_lists_non_base_rates(fixture_xml_path: Path):
+    from gearcity_optimizer.reports.stock_market_timeline import (
+        build_stock_market_timeline,
+    )
+
+    timeline = parse_turn_events_xml(fixture_xml_path)
+    rows = build_stock_market_timeline(timeline)
+
+    assert len(rows) == 2
+    assert rows[0].year == 1900
+    assert rows[0].turn == 1
+    assert rows[0].stockrate == pytest.approx(0.88)
+    assert rows[0].delta_from_base == pytest.approx(-0.12)
+    assert rows[0].explicit_update is True
+    assert rows[0].delta_from_previous is None
+
+    assert rows[1].year == 1900
+    assert rows[1].turn == 2
+    assert rows[1].stockrate == pytest.approx(0.88)
+    assert rows[1].explicit_update is False
+    assert rows[1].delta_from_previous == pytest.approx(0.0)

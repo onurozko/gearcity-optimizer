@@ -19,6 +19,11 @@ from gearcity_optimizer.reports.danger_periods import (
     danger_periods_for_map,
     summarize_timeline,
 )
+from gearcity_optimizer.reports.stock_market_timeline import (
+    format_rate_delta,
+    format_stockrate,
+    stock_market_timeline_for_map,
+)
 
 EMPTY_STATE_MESSAGE = (
     "No map event timelines have been imported yet. Import a `TurnEvents.xml` "
@@ -63,6 +68,8 @@ def render_historical_events_tab() -> None:
 
     _render_timeline_summary(selected_map)
     st.divider()
+    _render_stock_market_timeline(selected_map)
+    st.divider()
     _render_danger_periods(selected_map)
     st.divider()
     _render_import_panel(key_prefix="existing")
@@ -80,6 +87,32 @@ def _render_timeline_summary(map_source: MapSource) -> None:
     st.write(f"Turns with economy data: **{summary['turns_with_economy']}**")
     st.write(f"Turns with world events: **{summary['turns_with_world_events']}**")
     st.write(f"Turns with news events: **{summary['turns_with_news']}**")
+
+
+def _render_stock_market_timeline(map_source: MapSource) -> None:
+    rows_data = stock_market_timeline_for_map(map_source)
+    st.markdown(f"### {map_source.name} stock market below base")
+    st.caption(
+        "Shows turns where the stock market multiplier is not the normal base "
+        f"of {format_stockrate(1.0)}. Values are carried forward between "
+        "explicit TurnEvents updates, including gradual crash recoveries."
+    )
+    if not rows_data:
+        st.write("Stock market stayed at the base rate in this map timeline.")
+        return
+
+    rows = [
+        {
+            "Year": item.year,
+            "Turn": item.turn,
+            "Stock market rate": format_stockrate(item.stockrate),
+            "vs base": format_rate_delta(item.delta_from_base),
+            "Change from prev turn": format_rate_delta(item.delta_from_previous),
+            "Updated this turn": "yes" if item.explicit_update else "carried",
+        }
+        for item in rows_data
+    ]
+    st.dataframe(rows, use_container_width=True, hide_index=True)
 
 
 def _render_danger_periods(map_source: MapSource) -> None:
