@@ -182,6 +182,47 @@ Example file path:
 
 Other maps may have their own `TurnEvents.xml`, so import one per map.
 
+## Tech availability and Components.xml
+
+The app does not bundle GearCity `Components.xml`.
+
+`TurnEvents.xml` handles map-specific historical events. `Components.xml` handles
+tech and sub-component availability (unlock year, end year, required design skill).
+
+To use tech availability:
+
+1. Open the **Tech Availability** tab in Streamlit, or use the CLI.
+2. Import `Components.xml` from your GearCity install.
+3. Set year and design skill levels for chassis, engine, gearbox, and vehicle/coachwork.
+
+Example path (Steam install location may differ):
+
+`D:\SteamLibrary\steamapps\common\GearCity\media\Scripts\Components.xml`
+
+CLI:
+
+```powershell
+gearcity-optimizer import-components --components "D:\SteamLibrary\steamapps\common\GearCity\media\Scripts\Components.xml"
+gearcity-optimizer tech-availability --year 1905 --chassis-skill 20 --engine-skill 25 --gearbox-skill 15 --vehicle-skill 10
+```
+
+Optional category filter:
+
+```powershell
+gearcity-optimizer tech-availability --year 1905 --category engine
+```
+
+Inputs:
+
+- **Year** (minimum 1900)
+- **Chassis skill**, **Engine skill**, **Gearbox skill**, **Vehicle/coachwork skill** (0-100 scale assumed unless your XML uses a different obvious scale)
+- **Cost mode** (`cheap`, `balanced`, `luxury`) for recommendation preview scaffolding
+
+The first version filters available technologies by year and skill. Exact part scoring
+will improve as Components.xml category and stat parsing is verified.
+
+Imported files are stored under `user_data/game_files/components/` (gitignored).
+
 ## Component Naming Guide
 
 The Streamlit UI includes a **Naming Guide** tab with a compact naming standard for

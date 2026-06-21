@@ -81,6 +81,17 @@ from gearcity_optimizer.importers.wiki_parser import (
     import_wiki_pages,
     is_wiki_page_json,
 )
+from gearcity_optimizer.importers.component_sources import (
+    components_missing_message,
+    import_components_from_path,
+)
+from gearcity_optimizer.importers.components_xml import (
+    ComponentsValidationError,
+    catalog_summary,
+    classify_components,
+    load_imported_components_catalog,
+    validate_year_input,
+)
 from gearcity_optimizer.importers.map_sources import (
     discover_map_sources,
     import_map_from_path,
@@ -104,6 +115,10 @@ from gearcity_optimizer.core.terminology import (
     list_terminology_entries,
 )
 from gearcity_optimizer.core.terminology_verification import verify_term_search
+from gearcity_optimizer.reports.part_recommender import (
+    RecommendationInput,
+    build_recommendation_result,
+)
 from gearcity_optimizer.reports.design_checklist import (
     build_design_checklist,
     format_checklist_for_cli,
@@ -130,6 +145,8 @@ SUBCOMMANDS = {
     "danger-periods",
     "events-summary",
     "group-vehicle-types",
+    "import-components",
+    "tech-availability",
 }
 
 UNKNOWN_SUBCOMMAND = "__unknown__"
@@ -975,6 +992,100 @@ def handle_events_summary(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_import_components(args: argparse.Namespace) -> int:
+    """Import a GearCity Components.xml file into user_data/game_files/components/."""
+    source = import_components_from_path(
+        args.components,
+        name=args.name,
+        overwrite=args.overwrite,
+    )
+    print(f"Imported Components catalog {source.name!r}")
+    print(f"Saved Components.xml to {source.components_file}")
+    return 0
+
+
+def handle_tech_availability(args: argparse.Namespace) -> int:
+    """Print available and locked components for a year and skill profile."""
+    try:
+        validate_year_input(args.year)
+    except ValueError as exc:
+        raise SystemExit(f"Error: {exc}") from exc
+
+    catalog = load_imported_components_catalog()
+    if catalog is None:
+        raise SystemExit(components_missing_message())
+
+    skill_levels = {
+        "chassis": args.chassis_skill,
+        "engine": args.engine_skill,
+        "gearbox": args.gearbox_skill,
+        "vehicle": args.vehicle_skill,
+    }
+    category = args.category
+    available_rows, locked_rows = classify_components(
+        catalog,
+        args.year,
+        skill_levels,
+        category_filter=category,
+        name_search=args.search,
+    )
+
+    summary = catalog_summary(catalog)
+    print(f"\nTech availability for year {args.year}\n")
+    print(f"Catalog entries: {len(catalog.components)}")
+    if summary:
+        print(
+            "Categories: "
+            + ", ".join(f"{key}={count}" for key, count in sorted(summary.items()))
+        )
+    print(f"\nAvailable ({len(available_rows)})")
+    for row in available_rows[: args.limit]:
+        component = row.component
+        print(
+            f"- {component.name} [{component.category}/{component.subcategory}] "
+            f"skill={component.required_skill} start={component.start_year}"
+        )
+    if len(available_rows) > args.limit:
+        print(f"  ... and {len(available_rows) - args.limit} more")
+
+    print(f"\nLocked / unavailable ({len(locked_rows)})")
+    for row in locked_rows[: args.limit]:
+        component = row.component
+        print(
+            f"- {component.name} [{component.category}/{component.subcategory}] "
+            f"{row.status}: {row.reason}"
+        )
+    if len(locked_rows) > args.limit:
+        print(f"  ... and {len(locked_rows) - args.limit} more")
+
+    if args.vehicle_type:
+        vehicle_types = load_vehicle_types(args.vehicle_types_file)
+        if args.vehicle_type not in vehicle_types:
+            raise SystemExit(f"Unknown vehicle type: {args.vehicle_type!r}")
+        vehicle_type = vehicle_types[args.vehicle_type]
+        rec_input = RecommendationInput(
+            vehicle_type_name=args.vehicle_type,
+            year=args.year,
+            cost_mode=args.cost_mode,
+            chassis_skill=args.chassis_skill,
+            engine_skill=args.engine_skill,
+            gearbox_skill=args.gearbox_skill,
+            vehicle_skill=args.vehicle_skill,
+        )
+        result = build_recommendation_result(
+            vehicle_type=vehicle_type,
+            inputs=rec_input,
+            catalog=catalog,
+        )
+        print(f"\nRecommendation preview for {args.vehicle_type} ({args.cost_mode})\n")
+        for bullet in result.recommended_focus:
+            print(f"- {bullet}")
+        for note in result.limitations:
+            print(f"  note: {note}")
+
+    return 0
+
+
 def handle_group_vehicle_types(args: argparse.Namespace) -> int:
     """Cluster vehicle types by design-stat importance weights."""
     vehicle_types_dict = load_vehicle_types(args.vehicle_types_file)
@@ -1408,6 +1519,94 @@ def build_parser() -> argparse.ArgumentParser:
         help="Map id (required when multiple maps are imported)",
     )
 
+    import_components_parser = subparsers.add_parser(
+        "import-components",
+        help="Import GearCity Components.xml into user_data/game_files/components/",
+    )
+    import_components_parser.add_argument(
+        "--components",
+        required=True,
+        help="Path to Components.xml",
+    )
+    import_components_parser.add_argument(
+        "--name",
+        default="Default GearCity Components",
+        help="Label stored in metadata.json",
+    )
+    import_components_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Replace an existing imported Components.xml",
+    )
+
+    tech_availability_parser = subparsers.add_parser(
+        "tech-availability",
+        help="List available and locked components by year and design skill",
+    )
+    tech_availability_parser.add_argument(
+        "--year",
+        type=int,
+        default=1900,
+        help="Game year (minimum 1900)",
+    )
+    tech_availability_parser.add_argument(
+        "--chassis-skill",
+        type=float,
+        default=0.0,
+        help="Chassis design skill (0-100)",
+    )
+    tech_availability_parser.add_argument(
+        "--engine-skill",
+        type=float,
+        default=0.0,
+        help="Engine design skill (0-100)",
+    )
+    tech_availability_parser.add_argument(
+        "--gearbox-skill",
+        type=float,
+        default=0.0,
+        help="Gearbox design skill (0-100)",
+    )
+    tech_availability_parser.add_argument(
+        "--vehicle-skill",
+        type=float,
+        default=0.0,
+        help="Vehicle/coachwork design skill (0-100)",
+    )
+    tech_availability_parser.add_argument(
+        "--category",
+        default=None,
+        choices=["chassis", "engine", "gearbox", "vehicle", "unknown"],
+        help="Optional skill/category filter",
+    )
+    tech_availability_parser.add_argument(
+        "--search",
+        default=None,
+        help="Optional name search filter",
+    )
+    tech_availability_parser.add_argument(
+        "--vehicle-type",
+        default=None,
+        help="Optional vehicle type for recommendation preview",
+    )
+    tech_availability_parser.add_argument(
+        "--cost-mode",
+        default="balanced",
+        choices=["cheap", "balanced", "luxury"],
+        help="Cost mode for recommendation preview",
+    )
+    tech_availability_parser.add_argument(
+        "--vehicle-types-file",
+        default=_default_data_path(DEFAULT_VEHICLE_TYPES),
+        help="Path to vehicle types CSV",
+    )
+    tech_availability_parser.add_argument(
+        "--limit",
+        type=int,
+        default=25,
+        help="Maximum rows to print per section (default: 25)",
+    )
+
     group_vehicle_types_parser = subparsers.add_parser(
         "group-vehicle-types",
         help="Cluster vehicle types by similar design-stat priorities",
@@ -1461,6 +1660,8 @@ def build_parser() -> argparse.ArgumentParser:
         "list_maps": list_maps_parser,
         "danger_periods": danger_periods_parser,
         "events_summary": events_summary_parser,
+        "import_components": import_components_parser,
+        "tech_availability": tech_availability_parser,
         "group_vehicle_types": group_vehicle_types_parser,
     }
     return parser
@@ -1491,6 +1692,8 @@ def main(argv: list[str] | None = None) -> int:
     list_maps_parser = cli_parsers["list_maps"]
     danger_periods_parser = cli_parsers["danger_periods"]
     events_summary_parser = cli_parsers["events_summary"]
+    import_components_parser = cli_parsers["import_components"]
+    tech_availability_parser = cli_parsers["tech_availability"]
     group_vehicle_types_parser = cli_parsers["group_vehicle_types"]
 
     if subcommand == UNKNOWN_SUBCOMMAND:
@@ -1604,6 +1807,16 @@ def main(argv: list[str] | None = None) -> int:
         group_vehicle_types_parser.set_defaults(func=handle_group_vehicle_types)
         args = group_vehicle_types_parser.parse_args(remaining)
         return handle_group_vehicle_types(args)
+
+    if subcommand == "import-components":
+        import_components_parser.set_defaults(func=handle_import_components)
+        args = import_components_parser.parse_args(remaining)
+        return handle_import_components(args)
+
+    if subcommand == "tech-availability":
+        tech_availability_parser.set_defaults(func=handle_tech_availability)
+        args = tech_availability_parser.parse_args(remaining)
+        return handle_tech_availability(args)
 
     parser.print_help()
     return 1

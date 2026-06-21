@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Components>
+    <ChassisComponents>
+        <chassis name="90001" type="frame" year="1900" death="1920" skill="0" picture="TestFrame1900.dds"/>
+        <chassis name="90002" type="frame" year="1910" death="5050" skill="15" picture="TestFrame1910.dds"/>
+        <chassis name="90003" type="frame" year="1920" death="5050" skill="25" extraField="keep-me"/>
+    </ChassisComponents>
+    <EngineComponents>
+        <layout name="91001" type="layout" year="1898" death="5050" skill="10" picture="TestLayout.dds"/>
+        <cylinder name="91002" type="cylinder" year="1920" death="5050" skillReq="25" picture="TestCylinder.dds"/>
+    </EngineComponents>
+    <GearboxComponents>
+        <gearbox name="92001" type="transmission" year="1890" death="5050" skill="0" picture="TestManual.dds"/>
+        <gearbox name="92002" type="transmission" year="1912" death="5050" skill="20" picture="TestSyncManual.dds"/>
+    </GearboxComponents>
+    <MiscSection>
+        <unknownPart name="93001" type="mystery" weirdStart="1905" picture="UnknownPart.dds"/>
+    </MiscSection>
+</Components>

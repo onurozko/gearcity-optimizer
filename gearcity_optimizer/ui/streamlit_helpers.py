@@ -46,6 +46,7 @@ from gearcity_optimizer.reports.naming_guide import (
     load_naming_guide_markdown,
 )
 from gearcity_optimizer.ui.historical_events import render_historical_events_tab
+from gearcity_optimizer.ui.tech_availability import render_tech_availability_tab
 
 
 def project_root() -> Path:
@@ -180,7 +181,7 @@ def render_app() -> None:
 
     st.markdown(f"### Selected vehicle type: **{vehicle_type_name}**")
 
-    tab_checklist, tab_priorities, tab_groups, tab_naming, tab_wiki, tab_packages, tab_events = st.tabs(
+    tab_checklist, tab_priorities, tab_groups, tab_naming, tab_wiki, tab_packages, tab_events, tab_tech = st.tabs(
         [
             "Design Checklist",
             "Component Priorities",
@@ -189,6 +190,7 @@ def render_app() -> None:
             "Wiki / Formula Tools",
             "Package Optimizer",
             "Historical Events / Timeline",
+            "Tech Availability",
         ]
     )
 
@@ -433,3 +435,9 @@ def render_app() -> None:
 
     with tab_events:
         render_historical_events_tab()
+
+    with tab_tech:
+        render_tech_availability_tab(
+            vehicle_type_name=vehicle_type_name,
+            vehicle_type=vehicle_type,
+        )
