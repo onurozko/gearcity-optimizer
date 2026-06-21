@@ -87,9 +87,13 @@ from gearcity_optimizer.importers.component_sources import (
 )
 from gearcity_optimizer.importers.components_xml import (
     ComponentsValidationError,
+    audit_components_schema,
     catalog_summary,
     classify_components,
+    format_schema_audit_report,
+    get_available_component_choices,
     load_imported_components_catalog,
+    parse_component_choice_catalog,
     validate_year_input,
 )
 from gearcity_optimizer.importers.map_sources import (
@@ -117,14 +121,21 @@ from gearcity_optimizer.core.terminology import (
 from gearcity_optimizer.core.terminology_verification import verify_term_search
 from gearcity_optimizer.core.slider_registry import (
     list_sliders,
+    load_slider_registry,
     registry_sections,
     validate_registry,
 )
+from gearcity_optimizer.importers.wiki_knowledge_builder import build_wiki_knowledge_from_cache
+from gearcity_optimizer.reports.design_optimizer import DesignOptimizationInput, optimize_design
 from gearcity_optimizer.reports.slider_optimizer import (
     SliderOptimizationInput,
     optimize_real_slider_settings,
 )
-from gearcity_optimizer.ui.slider_audit import format_slider_audit_row
+from gearcity_optimizer.ui.slider_audit import (
+    format_slider_audit_row,
+    formula_influence_rows,
+    slider_definition_rows,
+)
 from gearcity_optimizer.reports.design_checklist import (
     build_design_checklist,
     format_checklist_for_cli,
@@ -154,7 +165,12 @@ SUBCOMMANDS = {
     "import-components",
     "tech-availability",
     "slider-audit",
+    "build-slider-registry",
+    "build-formula-effects",
+    "formula-effects-audit",
     "optimize-sliders",
+    "components-schema-audit",
+    "optimize-design",
 }
 
 UNKNOWN_SUBCOMMAND = "__unknown__"
@@ -772,6 +788,24 @@ def handle_inspect_sources(args: argparse.Namespace) -> int:
     else:
         print(f"\n{FORMULA_INDEX_MISSING_MSG}")
 
+    slider_registry_path = root / "generated/raw_parsed/wiki_slider_registry.json"
+    formula_effects_path = root / "generated/raw_parsed/wiki_formula_effects.json"
+    print("\nSlider/formula knowledge:")
+    if slider_registry_path.exists() and formula_effects_path.exists():
+        slider_payload = json.loads(slider_registry_path.read_text(encoding="utf-8"))
+        effects_payload = json.loads(formula_effects_path.read_text(encoding="utf-8"))
+        print(
+            f"  - slider registry: {slider_payload.get('slider_count', 0)} sliders "
+            f"({slider_registry_path})"
+        )
+        print(
+            f"  - formula effects: {effects_payload.get('effect_count', 0)} effects "
+            f"({formula_effects_path})"
+        )
+    else:
+        print("  - wiki slider registry / formula effects (missing)")
+        print("    Run: gearcity-optimizer setup-sources")
+
     print("\nNormalized files:")
     if wiki_csv_path.exists():
         row_count = len(pd.read_csv(wiki_csv_path))
@@ -1098,30 +1132,176 @@ def handle_tech_availability(args: argparse.Namespace) -> int:
 
 
 def handle_slider_audit(args: argparse.Namespace) -> int:
-    """Print the real controllable slider/input registry."""
+    """Print source-backed slider definitions and formula influence map."""
+    registry = load_slider_registry()
     warnings = validate_registry()
     section = args.section
-    sliders = list_sliders(section=section)
 
-    print("\nReal GearCity slider/input audit\n")
+    print("\nSlider & Formula Audit\n")
+    print(f"Registry source mode: {registry.source_mode}")
+    print(f"Slider definitions: {len(registry.sliders)}")
+    print(f"Formula effects: {len(registry.effects)}")
     if section:
         print(f"Section filter: {section}")
     else:
-        print(f"Sections: {', '.join(registry_sections())}")
-    print(f"Entries: {len(sliders)}\n")
+        print(f"Optimizer sections: {', '.join(registry_sections())}")
+    print()
 
     for warning in warnings:
         print(f"  warning: {warning}")
 
+    print("\nSlider definitions:")
+    for row in slider_definition_rows(page=section):
+        print(
+            f"- {row['formula variable']} ({row['page']}): "
+            f"{row['label']} [{row['control type']}, {row['confidence']}]"
+        )
+
+    print("\nFormula influence:")
+    influence = formula_influence_rows(page=section)
+    if not influence:
+        print("  (none loaded)")
+    for row in influence[:50]:
+        print(
+            f"- {row['output stat']}: sliders={row['sliders used'] or '(none)'}"
+        )
+
+    print("\nOptimizer slider controls:")
+    sliders = list_sliders(section=section)
     for slider in sliders:
         row = format_slider_audit_row(slider)
-        print(f"- {row['key']} ({row['section']})")
+        print(f"- {row['key']} ({row['page']})")
         print(f"  label: {row['label']}")
         print(f"  formula variable: {row['formula variable']}")
-        print(f"  range: {row['range']}")
-        print(f"  affected outputs: {row['affected outputs']}")
-        print(f"  confidence: {row['confidence']}")
+        print(f"  UI path: {row['UI path']}")
         print(f"  source: {row['source']}")
+        print(f"  confidence: {row['confidence']}")
+    return 0
+
+
+def handle_build_slider_registry(args: argparse.Namespace) -> int:
+    """Build wiki-backed slider registry JSON from cached wiki pages."""
+    summary = build_wiki_knowledge_from_cache()
+    if summary.get("error") == "missing_sources":
+        print("Missing wiki sources:")
+        for name in summary.get("missing_sources", []):
+            print(f"  - {name}")
+        print("\nRun: gearcity-optimizer setup-sources")
+        return 1
+    print("Built wiki slider registry.")
+    print(f"  sliders: {summary.get('slider_count', 0)}")
+    print(f"  path: {summary.get('slider_registry_path')}")
+    return 0
+
+
+def handle_build_formula_effects(args: argparse.Namespace) -> int:
+    """Build wiki formula influence map from cached wiki pages."""
+    summary = build_wiki_knowledge_from_cache()
+    if summary.get("error") == "missing_sources":
+        print("Missing wiki sources:")
+        for name in summary.get("missing_sources", []):
+            print(f"  - {name}")
+        print("\nRun: gearcity-optimizer setup-sources")
+        return 1
+    print("Built wiki formula influence map.")
+    print(f"  effects: {summary.get('effect_count', 0)}")
+    print(f"  path: {summary.get('formula_effects_path')}")
+    return 0
+
+
+def handle_formula_effects_audit(args: argparse.Namespace) -> int:
+    """Print wiki formula influence map audit rows."""
+    registry = load_slider_registry()
+    section = args.section
+    print("\nFormula effects audit\n")
+    print(f"Registry source mode: {registry.source_mode}")
+    print(f"Formula effects: {len(registry.effects)}")
+    if section:
+        print(f"Section filter: {section}")
+    print()
+
+    rows = formula_influence_rows(page=section)
+    if not rows:
+        print("No formula effects loaded.")
+        print("Run: gearcity-optimizer setup-sources")
+        return 1
+
+    for row in rows:
+        print(f"- {row['output']} ({row['source page']})")
+        print(f"  section: {row['formula section']}")
+        print(f"  sliders: {row['sliders used'] or '(none)'}")
+        print(f"  components: {row['component variables used'] or '(none)'}")
+        print(f"  confidence: {row['confidence']}")
+    return 0
+
+
+def handle_components_schema_audit(args: argparse.Namespace) -> int:
+    """Print a structural audit of a Components.xml file."""
+    path = Path(args.components)
+    if not path.is_file():
+        raise SystemExit(f"Error: Components.xml not found at {path}")
+    audit = audit_components_schema(path)
+    print(format_schema_audit_report(audit))
+    return 0
+
+
+def handle_optimize_design(args: argparse.Namespace) -> int:
+    """Recommend component choices and slider controls."""
+    try:
+        validate_year_input(args.year)
+    except ValueError as exc:
+        raise SystemExit(f"Error: {exc}") from exc
+
+    vehicle_types = load_vehicle_types(args.vehicle_types_file)
+    if args.vehicle_type not in vehicle_types:
+        raise SystemExit(f"Unknown vehicle type: {args.vehicle_type!r}")
+
+    vehicle_type = vehicle_types[args.vehicle_type]
+    result = optimize_design(
+        DesignOptimizationInput(
+            vehicle_type=vehicle_type,
+            year=args.year,
+            cost_mode=args.cost_mode,
+            chassis_skill=args.chassis_skill,
+            engine_skill=args.engine_skill,
+            gearbox_skill=args.gearbox_skill,
+            vehicle_skill=args.vehicle_skill,
+            depth=args.depth,
+            component_choice_mode="auto",
+        )
+    )
+
+    print(f"\nDesign optimizer for {args.vehicle_type} ({args.cost_mode})\n")
+    if result.component_choices is not None:
+        print("Recommended component choices:\n")
+        for recommendation in result.component_choices.choices:
+            if recommendation.recommended_choice is None:
+                continue
+            print(
+                f"  [{recommendation.section}] {recommendation.choice_type}: "
+                f"{recommendation.recommended_choice.display_name} "
+                f"({recommendation.confidence})"
+            )
+            print(f"    reason: {recommendation.reason}")
+    else:
+        print("No component choices available (Components.xml not imported).\n")
+
+    print("\nRecommended slider controls:\n")
+    current_section = None
+    for setting in result.slider_result.control_settings:
+        if setting.section != current_section:
+            current_section = setting.section
+            print(f"[{current_section}]")
+        print(
+            f"  {setting.label}: {setting.value} "
+            f"({setting.formula_variable or 'n/a'}, {setting.confidence})"
+        )
+
+    print("\nPredicted output stats:\n")
+    for output in result.slider_result.predicted_outputs:
+        proxy = " [proxy]" if output.is_proxy else ""
+        print(f"  {output.label}: {output.value:.2f}{proxy}")
+
     return 0
 
 
@@ -1150,8 +1330,17 @@ def handle_optimize_sliders(args: argparse.Namespace) -> int:
         )
     )
 
-    print(f"\nModel-optimized slider settings for {args.vehicle_type} ({args.cost_mode})\n")
-    print("Actual controls to set:\n")
+    if result.optimization_disabled:
+        print("\nWiki mechanics sources are missing.\n")
+        for warning in result.warnings:
+            print(f"  warning: {warning}")
+        for limitation in result.limitations:
+            print(f"  note: {limitation}")
+        print("\nRun: gearcity-optimizer setup-sources")
+        return 1
+
+    print(f"\nModel-optimized slider values for {args.vehicle_type} ({args.cost_mode})\n")
+    print("Recommended slider values:\n")
     current_section = None
     for setting in result.control_settings:
         if setting.section != current_section:
@@ -1710,9 +1899,28 @@ def build_parser() -> argparse.ArgumentParser:
 
     slider_audit_parser = subparsers.add_parser(
         "slider-audit",
-        help="List real controllable GearCity sliders/inputs from the formula registry",
+        help="Audit source-backed slider definitions and formula influence map",
     )
     slider_audit_parser.add_argument(
+        "--section",
+        default=None,
+        choices=["chassis", "engine", "gearbox", "vehicle", "testing"],
+        help="Optional section filter",
+    )
+
+    build_slider_registry_parser = subparsers.add_parser(
+        "build-slider-registry",
+        help="Build wiki-backed slider registry JSON from cached wiki pages",
+    )
+    build_formula_effects_parser = subparsers.add_parser(
+        "build-formula-effects",
+        help="Build wiki formula influence map JSON from cached wiki pages",
+    )
+    formula_effects_audit_parser = subparsers.add_parser(
+        "formula-effects-audit",
+        help="Audit wiki formula influence map from parsed mechanics pages",
+    )
+    formula_effects_audit_parser.add_argument(
         "--section",
         default=None,
         choices=["chassis", "engine", "gearbox", "vehicle", "testing"],
@@ -1776,6 +1984,41 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to vehicle types CSV",
     )
 
+    components_schema_audit_parser = subparsers.add_parser(
+        "components-schema-audit",
+        help="Inspect Components.xml structure and guessed choice categories",
+    )
+    components_schema_audit_parser.add_argument(
+        "--components",
+        required=True,
+        help="Path to Components.xml",
+    )
+
+    optimize_design_parser = subparsers.add_parser(
+        "optimize-design",
+        help="Recommend component choices and slider controls",
+    )
+    optimize_design_parser.add_argument("--vehicle-type", required=True)
+    optimize_design_parser.add_argument("--year", type=int, default=1900)
+    optimize_design_parser.add_argument(
+        "--cost-mode",
+        default="balanced",
+        choices=["cheap", "balanced", "luxury"],
+    )
+    optimize_design_parser.add_argument("--chassis-skill", type=float, default=0.0)
+    optimize_design_parser.add_argument("--engine-skill", type=float, default=0.0)
+    optimize_design_parser.add_argument("--gearbox-skill", type=float, default=0.0)
+    optimize_design_parser.add_argument("--vehicle-skill", type=float, default=0.0)
+    optimize_design_parser.add_argument(
+        "--depth",
+        default="balanced",
+        choices=["quick", "balanced", "thorough"],
+    )
+    optimize_design_parser.add_argument(
+        "--vehicle-types-file",
+        default=_default_data_path(DEFAULT_VEHICLE_TYPES),
+    )
+
     group_vehicle_types_parser = subparsers.add_parser(
         "group-vehicle-types",
         help="Cluster vehicle types by similar design-stat priorities",
@@ -1832,6 +2075,9 @@ def build_parser() -> argparse.ArgumentParser:
         "import_components": import_components_parser,
         "tech_availability": tech_availability_parser,
         "slider_audit": slider_audit_parser,
+        "build_slider_registry": build_slider_registry_parser,
+        "build_formula_effects": build_formula_effects_parser,
+        "formula_effects_audit": formula_effects_audit_parser,
         "optimize_sliders": optimize_sliders_parser,
         "group_vehicle_types": group_vehicle_types_parser,
     }
@@ -1866,6 +2112,9 @@ def main(argv: list[str] | None = None) -> int:
     import_components_parser = cli_parsers["import_components"]
     tech_availability_parser = cli_parsers["tech_availability"]
     slider_audit_parser = cli_parsers["slider_audit"]
+    build_slider_registry_parser = cli_parsers["build_slider_registry"]
+    build_formula_effects_parser = cli_parsers["build_formula_effects"]
+    formula_effects_audit_parser = cli_parsers["formula_effects_audit"]
     optimize_sliders_parser = cli_parsers["optimize_sliders"]
     group_vehicle_types_parser = cli_parsers["group_vehicle_types"]
 
@@ -1996,10 +2245,35 @@ def main(argv: list[str] | None = None) -> int:
         args = slider_audit_parser.parse_args(remaining)
         return handle_slider_audit(args)
 
+    if subcommand == "build-slider-registry":
+        build_slider_registry_parser.set_defaults(func=handle_build_slider_registry)
+        args = build_slider_registry_parser.parse_args(remaining)
+        return handle_build_slider_registry(args)
+
+    if subcommand == "build-formula-effects":
+        build_formula_effects_parser.set_defaults(func=handle_build_formula_effects)
+        args = build_formula_effects_parser.parse_args(remaining)
+        return handle_build_formula_effects(args)
+
+    if subcommand == "formula-effects-audit":
+        formula_effects_audit_parser.set_defaults(func=handle_formula_effects_audit)
+        args = formula_effects_audit_parser.parse_args(remaining)
+        return handle_formula_effects_audit(args)
+
     if subcommand == "optimize-sliders":
         optimize_sliders_parser.set_defaults(func=handle_optimize_sliders)
         args = optimize_sliders_parser.parse_args(remaining)
         return handle_optimize_sliders(args)
+
+    if subcommand == "components-schema-audit":
+        components_schema_audit_parser.set_defaults(func=handle_components_schema_audit)
+        args = components_schema_audit_parser.parse_args(remaining)
+        return handle_components_schema_audit(args)
+
+    if subcommand == "optimize-design":
+        optimize_design_parser.set_defaults(func=handle_optimize_design)
+        args = optimize_design_parser.parse_args(remaining)
+        return handle_optimize_design(args)
 
     parser.print_help()
     return 1

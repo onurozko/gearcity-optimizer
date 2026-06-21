@@ -8,7 +8,17 @@ from typing import Literal
 from gearcity_optimizer.core.component_priorities import get_adjusted_vehicle_weights
 from gearcity_optimizer.core.cost_mode import CostMode, parse_cost_mode
 from gearcity_optimizer.core.models import VehicleType
-from gearcity_optimizer.core.slider_registry import RealSlider, get_slider, list_sliders
+from gearcity_optimizer.core.slider_registry import (
+    RealSlider,
+    WIKI_MISSING_WARNING,
+    get_outputs_affected_by_slider,
+    get_slider,
+    list_sliders,
+    load_slider_registry,
+    registry_status_message,
+    wiki_model_available,
+)
+from gearcity_optimizer.importers.wiki_formula_effects import build_slider_influence_weights
 from gearcity_optimizer.formulas.chassis_formula import (
     ChassisFormulaInputs,
     ChassisFormulaResult,
@@ -34,6 +44,7 @@ from gearcity_optimizer.core.component_models import (
     EngineCandidate,
     GearboxCandidate,
 )
+from gearcity_optimizer.importers.component_choices import ComponentChoice
 from gearcity_optimizer.importers.components_xml import validate_year_input
 from gearcity_optimizer.reports.part_recommender import is_work_or_utility_focused
 
@@ -41,28 +52,28 @@ OptimizationDepth = Literal["quick", "balanced", "thorough"]
 
 LUXURY_SLIDER_KEYS = frozenset(
     {
-        "design_smoothness",
-        "luxury_focus",
-        "style_focus",
-        "material_quality",
-        "tech_materials",
-        "tech_technology",
-        "tech_material",
         "sus_comfort",
+        "tech_materials",
+        "tech_material",
+        "tech_technology",
+        "layout_length",
     }
 )
 
 COST_SLIDER_KEYS = frozenset(
     {
         "design_pace",
+        "development_pace",
         "tech_materials",
         "tech_technology",
         "tech_components",
         "tech_techniques",
         "tech_material",
-        "material_quality",
-        "style_focus",
     }
+)
+
+ENGINE_SUBCOMPONENT_SLIDER_FIELDS = frozenset(
+    {"layout_length", "layout_width", "layout_weight"}
 )
 
 
@@ -88,6 +99,10 @@ class ControlSetting:
     reason: str
     confidence: str
     formula_variable: str | None = None
+    source_page: str = ""
+    source_section: str = ""
+    affected_outputs: tuple[str, ...] = ()
+    source_context: str = ""
 
 
 @dataclass(frozen=True)
@@ -114,6 +129,7 @@ class SliderOptimizationInput:
     gearbox_skill: float = 0.0
     vehicle_skill: float = 0.0
     depth: OptimizationDepth = "balanced"
+    selected_choices: dict[str, ComponentChoice] | None = None
 
 
 @dataclass(frozen=True)
@@ -130,6 +146,8 @@ class SliderOptimizationResult:
     engine_result: EngineFormulaResult | None = None
     gearbox_result: GearboxFormulaResult | None = None
     vehicle_ratings: VehicleAssemblyRatings | None = None
+    wiki_model_loaded: bool = False
+    optimization_disabled: bool = False
 
 
 def build_optimization_goals(
@@ -215,199 +233,242 @@ def _recommend_normalized_value(
     slider: RealSlider,
     vehicle_type: VehicleType,
     cost_mode: CostMode,
+    *,
+    influence_weights: dict[str, float],
 ) -> tuple[float, str]:
-    weights = get_adjusted_vehicle_weights(vehicle_type)
+    wiki_var = slider.wiki_formula_variable
     key = slider.field_name
 
-    mapping: dict[str, tuple[str, str]] = {
-        "design_fuel_economy": ("fuel", "Fuel economy priority"),
-        "design_dependability": ("dependability", "Dependability priority"),
-        "design_performance": ("performance", "Performance priority"),
-        "design_smoothness": ("luxury", "Luxury/smoothness priority"),
-        "design_strength": ("safety", "Safety/strength priority"),
-        "design_control": ("drivability", "Drivability/control priority"),
-        "design_ease": ("dependability", "Ease/manufacturing priority"),
-        "sus_comfort": ("luxury", "Comfort/luxury priority"),
-        "sus_performance": ("performance", "Performance priority"),
-        "sus_durability": ("dependability", "Durability priority"),
-        "sus_braking": ("safety", "Safety/braking priority"),
-        "sus_stability": ("drivability", "Stability/drivability priority"),
-        "fd_weight": ("fuel", "Weight vs cargo/fuel tradeoff"),
-        "fd_length": ("cargo", "Cargo/length priority"),
-        "torque_max_input": ("power", "Power/torque support priority"),
-        "low_gear_ratio": ("power", "Low-end torque priority"),
-        "high_gear_ratio": ("fuel", "High-speed fuel economy priority"),
-        "safety_focus": ("safety", "Vehicle safety focus"),
-        "dependability_focus": ("dependability", "Vehicle dependability focus"),
-        "cargo_focus": ("cargo", "Vehicle cargo focus"),
-        "luxury_focus": ("luxury", "Vehicle luxury focus"),
-        "style_focus": ("luxury", "Vehicle style focus"),
-        "material_quality": ("quality", "Material quality priority"),
-        "testing_reliability": ("dependability", "Reliability testing priority"),
-        "testing_fuel": ("fuel", "Fuel testing priority"),
-        "testing_performance": ("performance", "Performance testing priority"),
-        "testing_utility": ("cargo", "Utility testing priority"),
-        "tech_materials": ("dependability", "Materials tech level"),
-        "tech_components": ("performance", "Components tech level"),
-        "tech_techniques": ("fuel", "Techniques tech level"),
-        "tech_technology": ("performance", "Technology level"),
-        "tech_material": ("dependability", "Gearbox material tech"),
-        "fuel_system_quality": ("fuel", "Fuel system quality"),
-        "aspiration_quality": ("performance", "Aspiration quality"),
-        "design_pace": ("dependability", "Design pace vs cost"),
-    }
-
-    if key in mapping:
-        weight_key, reason_prefix = mapping[key]
-        weight = weights.get(weight_key, 0.35)
-        if weight_key == "quality":
-            weight = 0.45
-        value = _cost_mode_scale(key, _priority(weight), cost_mode, vehicle_type=vehicle_type)
-        return round(value, 3), f"{reason_prefix} for {vehicle_type.name}."
+    if wiki_var and influence_weights.get(wiki_var, 0.0) > 0.0:
+        max_influence = max(influence_weights.values())
+        normalized_influence = influence_weights[wiki_var] / max_influence if max_influence else 0.0
+        value = _cost_mode_scale(
+            key,
+            _priority(normalized_influence),
+            cost_mode,
+            vehicle_type=vehicle_type,
+        )
+        outputs = slider.affected_outputs or tuple(
+            effect.output_label for effect in get_outputs_affected_by_slider(wiki_var)
+        )
+        output_text = ", ".join(outputs[:3]) if outputs else "parsed wiki outputs"
+        return round(value, 3), (
+            f"Formula-model optimized: wiki formulas link {slider.label} to {output_text}."
+        )
 
     value = _cost_mode_scale(key, 0.45, cost_mode, vehicle_type=vehicle_type)
-    return round(value, 3), f"Balanced default for {vehicle_type.name}."
+    return round(value, 3), (
+        f"No parsed wiki formula influence found for {slider.label}; using neutral default."
+    )
 
 
 def _recommend_dimensional_value(
     slider: RealSlider,
     vehicle_type: VehicleType,
     cost_mode: CostMode,
-    year: int,
+    *,
+    influence_weights: dict[str, float],
 ) -> tuple[float, str]:
-    weights = get_adjusted_vehicle_weights(vehicle_type)
-    perf = weights.get("performance", 0.0)
-    power = weights.get("power", 0.0)
-    fuel = weights.get("fuel", 0.0)
-
-    if slider.field_name == "bore":
-        value = 58.0 + 22.0 * _priority(max(perf, power))
-        if cost_mode is CostMode.CHEAP:
-            value -= 6.0
+    wiki_var = slider.wiki_formula_variable
+    if wiki_var and influence_weights.get(wiki_var, 0.0) > 0.0:
+        max_influence = max(influence_weights.values())
+        normalized_influence = influence_weights[wiki_var] / max_influence if max_influence else 0.0
+        span = slider.max_value - slider.min_value
+        value = slider.min_value + span * _priority(normalized_influence)
+        outputs = slider.affected_outputs or tuple(
+            effect.output_label for effect in get_outputs_affected_by_slider(wiki_var)
+        )
+        output_text = ", ".join(outputs[:3]) if outputs else "parsed wiki outputs"
         return round(_clamp(value, slider.min_value, slider.max_value), 1), (
-            "Sized from performance/power priority; affects displacement and torque."
+            f"Formula-model optimized from wiki influence on {output_text}."
         )
-    if slider.field_name == "stroke":
-        value = 60.0 + 20.0 * _priority(power) - 8.0 * _priority(fuel)
-        return round(_clamp(value, slider.min_value, slider.max_value), 1), (
-            "Longer stroke favors torque; shorter stroke favors RPM/fuel economy."
-        )
-    if slider.field_name == "displacement":
-        cylinders = 4
-        value = 800.0 + 350.0 * _priority(power) + 200.0 * _priority(perf)
-        if cost_mode is CostMode.CHEAP:
-            value *= 0.85
-        return round(_clamp(value, slider.min_value, slider.max_value), 0), (
-            "Displacement scales with power needs when bore/stroke are not fixed."
-        )
-    if slider.field_name == "cylinders":
-        if power >= 0.65 or perf >= 0.75:
-            value = 6.0
-        elif power >= 0.45:
-            value = 4.0
-        elif year < 1905 or cost_mode is CostMode.CHEAP:
-            value = 2.0
-        else:
-            value = 4.0
-        return value, "Cylinder count based on era, cost mode, and power needs."
-    if slider.field_name == "number_of_gears":
-        if year < 1912:
-            value = 2.0 if cost_mode is CostMode.CHEAP else 3.0
-        elif cost_mode is CostMode.LUXURY:
-            value = 4.0
-        else:
-            value = 3.0
-        return value, "Gear count based on year and cost mode."
-    if slider.field_name.startswith("has_") or slider.field_name.startswith("is_"):
-        enabled = False
-        if slider.field_name == "has_reverse":
-            enabled = True
-        elif slider.field_name in {"has_overdrive"} and cost_mode is not CostMode.CHEAP and year >= 1930:
-            enabled = True
-        elif slider.field_name == "has_limited_slip" and perf >= 0.65:
-            enabled = True
-        elif slider.field_name in {"is_supercharged", "is_turbocharged"} and year >= 1920 and perf >= 0.75:
-            enabled = False if cost_mode is CostMode.CHEAP else False
-        elif slider.field_name == "has_fuel_injection" and year >= 1950:
-            enabled = cost_mode is not CostMode.CHEAP
-        elif slider.field_name == "has_overhead_cam" and year >= 1910 and cost_mode is not CostMode.CHEAP:
-            enabled = perf >= 0.45 or weights.get("luxury", 0.0) >= 0.45
-        value = 1.0 if enabled else 0.0
-        return value, "Feature enabled only when era and priorities justify the complexity."
 
-    return slider.default_value, "Default registry value."
+    return slider.default_value, (
+        f"No parsed wiki formula influence found for {slider.label}; using neutral default."
+    )
 
 
 def _display_value(slider: RealSlider, raw: float) -> float:
-    if slider.max_value <= 1.0 and slider.min_value >= 0.0 and slider.field_name not in {
-        "cylinders",
-        "number_of_gears",
-    } and not slider.field_name.startswith(("has_", "is_")):
-        return round(raw * 100.0, 1)
-    if slider.field_name in {"cylinders", "number_of_gears"}:
-        return float(int(round(raw)))
-    if slider.field_name.startswith(("has_", "is_")):
-        return float(int(round(raw)))
+    if slider.scale == "percent":
+        return round(raw * 100.0, 1) if raw <= 1.0 else round(raw, 1)
     return round(raw, 1)
+
+
+def _apply_selected_choices_to_settings(
+    settings: list[ControlSetting],
+    selected_choices: dict[str, ComponentChoice] | None,
+) -> list[ControlSetting]:
+    """Annotate slider recommendations when manual/auto component choices were made."""
+    if not selected_choices:
+        return settings
+
+    updated = list(settings)
+    by_key = {setting.slider_key: index for index, setting in enumerate(updated)}
+    layout = selected_choices.get("engine_layout")
+    if layout is not None and "engine.layout_length" in by_key:
+        idx = by_key["engine.layout_length"]
+        old = updated[idx]
+        updated[idx] = ControlSetting(
+            slider_key=old.slider_key,
+            label=old.label,
+            section=old.section,
+            value=old.value,
+            reason=(
+                f"{old.reason} Selected engine layout: {layout.display_name}."
+            ),
+            confidence=old.confidence,
+            formula_variable=old.formula_variable,
+            source_page=old.source_page,
+            source_section=old.source_section,
+            affected_outputs=old.affected_outputs,
+            source_context=old.source_context,
+        )
+    return updated
+
+
+def _subcomponent_values_from_choices(
+    selected_choices: dict[str, ComponentChoice] | None,
+) -> dict[str, dict[str, float]]:
+    """Map selected choices to subcomponent stat proxies for formulas."""
+    if not selected_choices:
+        return {"engine": {}, "chassis": {}, "gearbox": {}}
+
+    engine: dict[str, float] = {}
+    chassis: dict[str, float] = {}
+    gearbox: dict[str, float] = {}
+
+    layout = selected_choices.get("engine_layout")
+    if layout is not None:
+        for src, dest in (
+            ("weight", "layout_weight"),
+            ("width", "layout_width"),
+            ("length", "layout_length"),
+            ("smoothness", "layout_smoothness"),
+            ("reliability", "layout_reliability"),
+            ("performance", "layout_performance"),
+            ("manufacturing", "layout_manufacturing"),
+            ("design", "layout_design"),
+        ):
+            if src in layout.stats:
+                engine[dest] = layout.stats[src]
+
+    fuel = selected_choices.get("fuel_type")
+    if fuel is not None:
+        for src, dest in (
+            ("performance", "fuel_system_performance"),
+            ("fueleconomy", "fuel_system_fuel_economy"),
+            ("reliability", "fuel_system_reliability"),
+        ):
+            if src in fuel.stats:
+                engine[dest] = fuel.stats[src]
+
+    induction = selected_choices.get("forced_induction")
+    if induction is not None:
+        for src, dest in (
+            ("performance", "aspiration_performance"),
+            ("fueleconomy", "aspiration_fuel_economy"),
+            ("reliability", "aspiration_reliability"),
+        ):
+            if src in induction.stats:
+                engine[dest] = induction.stats[src]
+
+    frame = selected_choices.get("frame")
+    if frame is not None:
+        for src, dest in (
+            ("weight", "subcomponent_weight"),
+            ("complexity", "subcomponent_complexity"),
+            ("performance", "subcomponent_performance_rating"),
+            ("reliability", "subcomponent_durability"),
+        ):
+            if src in frame.stats:
+                chassis[dest] = frame.stats[src]
+
+    gearbox_type = selected_choices.get("gearbox_type")
+    if gearbox_type is not None:
+        for src, dest in (
+            ("performance", "subcomponent_performance_rating"),
+            ("fueleconomy", "subcomponent_fuel_rating"),
+            ("reliability", "subcomponent_durability"),
+            ("smoothness", "subcomponent_smoothness"),
+        ):
+            if src in gearbox_type.stats:
+                gearbox[dest] = gearbox_type.stats[src]
+
+    return {"engine": engine, "chassis": chassis, "gearbox": gearbox}
 
 
 def _build_control_settings(
     vehicle_type: VehicleType,
     cost_mode: CostMode,
-    year: int,
+    goals: list[OptimizationGoal],
 ) -> list[ControlSetting]:
+    registry = load_slider_registry()
+    goal_weights = {goal.output_key: goal.target_weight for goal in goals}
+    influence_weights = build_slider_influence_weights(goal_weights, registry.effects)
     settings: list[ControlSetting] = []
     for slider in list_sliders():
-        if slider.max_value <= 1.0 and slider.min_value >= 0.0 and slider.field_name not in {
-            "cylinders",
-            "number_of_gears",
-        } and not slider.field_name.startswith(("has_", "is_")):
-            raw, reason = _recommend_normalized_value(slider, vehicle_type, cost_mode)
+        if slider.scale == "percent":
+            raw, reason = _recommend_normalized_value(
+                slider,
+                vehicle_type,
+                cost_mode,
+                influence_weights=influence_weights,
+            )
+            raw = _clamp(raw, 0.0, 1.0)
+            display = _display_value(slider, raw)
         else:
             raw, reason = _recommend_dimensional_value(
-                slider, vehicle_type, cost_mode, year
+                slider,
+                vehicle_type,
+                cost_mode,
+                influence_weights=influence_weights,
             )
-        raw = _clamp(raw, slider.min_value, slider.max_value)
+            raw = _clamp(raw, slider.min_value, slider.max_value)
+            display = _display_value(slider, raw)
         settings.append(
             ControlSetting(
                 slider_key=slider.key,
                 label=slider.label,
                 section=slider.section,
-                value=_display_value(slider, raw),
+                value=display,
                 reason=reason,
                 confidence=slider.confidence,
-                formula_variable=slider.formula_variable,
+                formula_variable=slider.wiki_formula_variable,
+                source_page=slider.source_page,
+                source_section=slider.source_section,
+                affected_outputs=slider.affected_outputs,
+                source_context=slider.source_context,
             )
         )
     return settings
 
 
-def _settings_by_section(settings: list[ControlSetting]) -> dict[str, dict[str, float]]:
+def _settings_by_section(
+    settings: list[ControlSetting],
+) -> tuple[dict[str, dict[str, float]], dict[str, float]]:
     grouped: dict[str, dict[str, float]] = {
         "chassis": {},
         "engine": {},
         "gearbox": {},
-        "vehicle": {},
-        "testing": {},
     }
+    engine_subcomponents: dict[str, float] = {}
     for setting in settings:
         slider = get_slider(setting.slider_key)
-        if slider is None:
+        if slider is None or slider.formula_field is None:
             continue
-        raw = setting.value
-        if slider.max_value <= 1.0 and slider.min_value >= 0.0 and slider.field_name not in {
-            "cylinders",
-            "number_of_gears",
-        } and not slider.field_name.startswith(("has_", "is_")):
-            raw = raw / 100.0
-        grouped.setdefault(setting.section, {})[slider.field_name] = raw
-    return grouped
+        raw = setting.value / 100.0 if slider.scale == "percent" else setting.value
+        if slider.field_name in ENGINE_SUBCOMPONENT_SLIDER_FIELDS:
+            engine_subcomponents[slider.formula_field] = raw
+            continue
+        grouped.setdefault(setting.section, {})[slider.formula_field] = raw
+    return grouped, engine_subcomponents
 
 
 def _chassis_inputs_from_settings(
     values: dict[str, float],
     *,
     year: int,
+    extra: dict[str, float] | None = None,
 ) -> ChassisFormulaInputs:
     kwargs: dict[str, object] = {"year": year, "name": "Optimized Chassis"}
     for field in fields(ChassisFormulaInputs):
@@ -415,6 +476,10 @@ def _chassis_inputs_from_settings(
             continue
         if field.name in values:
             kwargs[field.name] = values[field.name]
+    if extra:
+        for key, value in extra.items():
+            if key in {field.name for field in fields(ChassisFormulaInputs)}:
+                kwargs[key] = value
     return ChassisFormulaInputs(**kwargs)
 
 
@@ -422,6 +487,7 @@ def _engine_inputs_from_settings(
     values: dict[str, float],
     *,
     year: int,
+    extra: dict[str, float] | None = None,
 ) -> EngineFormulaInputs:
     kwargs: dict[str, object] = {"year": year, "name": "Optimized Engine"}
     bool_fields = {
@@ -443,6 +509,10 @@ def _engine_inputs_from_settings(
             kwargs[field.name] = int(raw)
         else:
             kwargs[field.name] = float(raw)
+    if extra:
+        for key, value in extra.items():
+            if key in {field.name for field in fields(EngineFormulaInputs)}:
+                kwargs[key] = value
     if "bore" in values and "stroke" in values:
         kwargs["bore"] = float(values["bore"])
         kwargs["stroke"] = float(values["stroke"])
@@ -453,6 +523,7 @@ def _gearbox_inputs_from_settings(
     values: dict[str, float],
     *,
     year: int,
+    extra: dict[str, float] | None = None,
 ) -> GearboxFormulaInputs:
     kwargs: dict[str, object] = {"year": year, "name": "Optimized Gearbox"}
     bool_fields = {"has_limited_slip", "has_overdrive", "has_transaxle", "has_reverse"}
@@ -468,6 +539,10 @@ def _gearbox_inputs_from_settings(
             kwargs[field.name] = int(raw)
         else:
             kwargs[field.name] = float(raw)
+    if extra:
+        for key, value in extra.items():
+            if key in {field.name for field in fields(GearboxFormulaInputs)}:
+                kwargs[key] = value
     return GearboxFormulaInputs(**kwargs)
 
 
@@ -481,22 +556,32 @@ def _build_predicted_outputs(
 ) -> list[PredictedOutput]:
     weight_by_key = {goal.output_key: goal.target_weight for goal in goals}
     outputs = [
-        PredictedOutput("engine_torque", "Engine torque", engine.torque, weight_by_key.get("engine_torque", 0.0), "From engine formula.", False),
-        PredictedOutput("engine_horsepower", "Engine horsepower", engine.horsepower, weight_by_key.get("engine_horsepower", 0.0), "From engine formula.", False),
-        PredictedOutput("engine_fuel_economy_rating", "Engine fuel economy rating", engine.fuel_economy, weight_by_key.get("fuel", 0.0), "From engine formula.", False),
-        PredictedOutput("engine_reliability_rating", "Engine reliability rating", engine.reliability_rating, weight_by_key.get("dependability", 0.0), "From engine formula.", False),
-        PredictedOutput("engine_smoothness_rating", "Engine smoothness rating", engine.smoothness_rating, weight_by_key.get("luxury", 0.0), "From engine formula.", False),
-        PredictedOutput("chassis_comfort_rating", "Chassis comfort rating", chassis.comfort_rating, weight_by_key.get("luxury", 0.0), "From chassis formula.", False),
-        PredictedOutput("chassis_strength_rating", "Chassis strength rating", chassis.strength_rating, weight_by_key.get("safety", 0.0), "From chassis formula.", False),
-        PredictedOutput("chassis_durability_rating", "Chassis durability rating", chassis.durability_rating, weight_by_key.get("dependability", 0.0), "From chassis formula.", False),
-        PredictedOutput("gearbox_max_torque_support", "Gearbox max torque support", gearbox.max_torque_support, weight_by_key.get("gearbox_max_torque_support", 0.0), "From gearbox formula.", False),
-        PredictedOutput("gearbox_fuel_economy_rating", "Gearbox fuel economy rating", gearbox.fuel_economy_rating, weight_by_key.get("fuel", 0.0), "From gearbox formula.", False),
+        PredictedOutput("power", "Power", engine.horsepower, weight_by_key.get("engine_horsepower", 0.0), "Predicted from engine formula.", False),
+        PredictedOutput("torque", "Torque", engine.torque, weight_by_key.get("engine_torque", 0.0), "Predicted from engine formula.", False),
+        PredictedOutput("fuel", "Fuel", engine.fuel_economy, weight_by_key.get("fuel", 0.0), "Predicted from engine formula.", False),
+        PredictedOutput("smoothness", "Smoothness", engine.smoothness_rating, weight_by_key.get("luxury", 0.0), "Predicted from engine formula.", False),
+        PredictedOutput("reliability", "Reliability", engine.reliability_rating, weight_by_key.get("dependability", 0.0), "Predicted from engine formula.", False),
+        PredictedOutput("overall", "Overall", engine.overall_rating, weight_by_key.get("performance", 0.0), "Predicted from engine formula.", False),
+        PredictedOutput(
+            "design_requirements",
+            "Design requirements",
+            chassis.overall_rating * 0.35 + engine.overall_rating * 0.35 + gearbox.overall_rating * 0.30,
+            0.2,
+            "Proxy from component overall ratings and development pace sliders.",
+            True,
+        ),
+        PredictedOutput(
+            "manufacturing_requirements",
+            "Manufacturing requirements",
+            (100.0 - chassis.performance_rating) * 0.4 + (100.0 - engine.reliability_rating) * 0.3,
+            0.2,
+            "Proxy from reliability/performance tradeoffs and cost mode.",
+            True,
+        ),
+        PredictedOutput("chassis_comfort", "Chassis comfort (proxy)", chassis.comfort_rating, weight_by_key.get("luxury", 0.0), "From chassis formula.", False),
+        PredictedOutput("chassis_strength", "Chassis strength (proxy)", chassis.strength_rating, weight_by_key.get("safety", 0.0), "From chassis formula.", False),
+        PredictedOutput("gearbox_torque_support", "Gearbox torque support (proxy)", gearbox.max_torque_support, weight_by_key.get("gearbox_max_torque_support", 0.0), "From gearbox formula.", False),
         PredictedOutput("vehicle_performance", "Vehicle performance (proxy)", vehicle.performance, weight_by_key.get("performance", 0.0), "Proxy assembly from component ratings.", True),
-        PredictedOutput("vehicle_drivability", "Vehicle drivability (proxy)", vehicle.drivability, weight_by_key.get("drivability", 0.0), "Proxy assembly from component ratings.", True),
-        PredictedOutput("vehicle_luxury", "Vehicle luxury (proxy)", vehicle.luxury, weight_by_key.get("luxury", 0.0), "Proxy assembly from component ratings.", True),
-        PredictedOutput("vehicle_safety", "Vehicle safety (proxy)", vehicle.safety, weight_by_key.get("safety", 0.0), "Proxy assembly from component ratings.", True),
-        PredictedOutput("vehicle_fuel", "Vehicle fuel economy (proxy)", vehicle.fuel, weight_by_key.get("fuel", 0.0), "Proxy assembly from component ratings.", True),
-        PredictedOutput("vehicle_power", "Vehicle power (proxy)", vehicle.power, weight_by_key.get("power", 0.0), "Proxy assembly from component ratings.", True),
         PredictedOutput("vehicle_dependability", "Vehicle dependability (proxy)", vehicle.dependability, weight_by_key.get("dependability", 0.0), "Proxy assembly from component ratings.", True),
     ]
     return outputs
@@ -532,7 +617,7 @@ def _build_tradeoffs(
         )
     if is_work_or_utility_focused(vehicle_type):
         tradeoffs.append(
-            "Torque max input and low gear ratio are kept high enough for work-focused "
+            "Maximum Torque Input and Low End Gearing are kept high enough for work-focused "
             "load requirements."
         )
     if goals:
@@ -549,12 +634,49 @@ def optimize_real_slider_settings(
     cost_mode = parse_cost_mode(input_data.cost_mode)
     vehicle_type = input_data.vehicle_type
     goals = build_optimization_goals(vehicle_type, cost_mode)
-    controls = _build_control_settings(vehicle_type, cost_mode, input_data.year)
-    grouped = _settings_by_section(controls)
 
-    chassis_inputs = _chassis_inputs_from_settings(grouped.get("chassis", {}), year=input_data.year)
-    engine_inputs = _engine_inputs_from_settings(grouped.get("engine", {}), year=input_data.year)
-    gearbox_inputs = _gearbox_inputs_from_settings(grouped.get("gearbox", {}), year=input_data.year)
+    if not wiki_model_available():
+        return SliderOptimizationResult(
+            control_settings=[],
+            predicted_outputs=[],
+            goals=goals,
+            tradeoffs=[],
+            warnings=[WIKI_MISSING_WARNING],
+            limitations=[
+                "Exact slider optimization requires parsed GearCity Wiki mechanics.",
+                "Run `gearcity-optimizer setup-sources` to build the source-backed optimizer model.",
+            ],
+            wiki_model_loaded=False,
+            optimization_disabled=True,
+        )
+
+    controls = _build_control_settings(vehicle_type, cost_mode, goals)
+    controls = _apply_selected_choices_to_settings(
+        controls,
+        input_data.selected_choices,
+    )
+    grouped, engine_slider_subcomponents = _settings_by_section(controls)
+    choice_subcomponents = _subcomponent_values_from_choices(input_data.selected_choices)
+    engine_extra = {
+        **choice_subcomponents.get("engine", {}),
+        **engine_slider_subcomponents,
+    }
+
+    chassis_inputs = _chassis_inputs_from_settings(
+        grouped.get("chassis", {}),
+        year=input_data.year,
+        extra=choice_subcomponents.get("chassis", {}),
+    )
+    engine_inputs = _engine_inputs_from_settings(
+        grouped.get("engine", {}),
+        year=input_data.year,
+        extra=engine_extra,
+    )
+    gearbox_inputs = _gearbox_inputs_from_settings(
+        grouped.get("gearbox", {}),
+        year=input_data.year,
+        extra=choice_subcomponents.get("gearbox", {}),
+    )
 
     chassis_result = calculate_chassis(chassis_inputs)
     engine_result = calculate_engine(engine_inputs)
@@ -603,14 +725,26 @@ def optimize_real_slider_settings(
     warnings = list(chassis_result.warnings) + list(engine_result.warnings) + list(
         gearbox_result.warnings
     )
+    registry = load_slider_registry()
+    warnings.extend(registry.warnings)
+    status_message = registry_status_message()
     limitations = [
-        "These are model-optimized settings from the current formula/proxy model. "
-        "They are not guaranteed hidden game-code perfection.",
-        "Vehicle/coachwork and testing sliders use proxy influence until full vehicle "
-        "body formulas are wired in.",
-        "Components.xml tech choices are not auto-selected yet; inspect available tech "
-        "separately in the Tech Availability tables.",
+        "Formula-model optimized from GearCity Wiki mechanics. "
+        "Deterministic recommendations based on parsed wiki pseudo-code, not hidden game code.",
+        "Slider Summary controls use exact in-game labels; predicted outputs are separate.",
     ]
+    if registry.source_mode == "wiki" and status_message:
+        limitations.insert(0, status_message)
+    if input_data.selected_choices:
+        limitations.append(
+            "Slider values were optimized around the selected Components.xml component "
+            "choices where parsed stats were available."
+        )
+    else:
+        limitations.append(
+            "No Components.xml component choices were applied; slider values use "
+            "formula/proxy defaults."
+        )
     return SliderOptimizationResult(
         control_settings=controls,
         predicted_outputs=predicted,
@@ -622,6 +756,8 @@ def optimize_real_slider_settings(
         engine_result=engine_result,
         gearbox_result=gearbox_result,
         vehicle_ratings=vehicle_ratings,
+        wiki_model_loaded=True,
+        optimization_disabled=False,
     )
 
 

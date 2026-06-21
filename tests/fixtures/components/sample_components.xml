@@ -1,19 +1,64 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<Components>
-    <ChassisComponents>
-        <chassis name="90001" type="frame" year="1900" death="1920" skill="0" picture="TestFrame1900.dds"/>
-        <chassis name="90002" type="frame" year="1910" death="5050" skill="15" picture="TestFrame1910.dds"/>
-        <chassis name="90003" type="frame" year="1920" death="5050" skill="25" extraField="keep-me"/>
-    </ChassisComponents>
-    <EngineComponents>
-        <layout name="91001" type="layout" year="1898" death="5050" skill="10" picture="TestLayout.dds"/>
-        <cylinder name="91002" type="cylinder" year="1920" death="5050" skillReq="25" picture="TestCylinder.dds"/>
-    </EngineComponents>
-    <GearboxComponents>
-        <gearbox name="92001" type="transmission" year="1890" death="5050" skill="0" picture="TestManual.dds"/>
-        <gearbox name="92002" type="transmission" year="1912" death="5050" skill="20" picture="TestSyncManual.dds"/>
-    </GearboxComponents>
-    <MiscSection>
-        <unknownPart name="93001" type="mystery" weirdStart="1905" picture="UnknownPart.dds"/>
-    </MiscSection>
-</Components>
+<?xml version="1.0" encoding="UTF-8"?>
+
+<Components>
+
+    <ChassisComponents>
+
+        <chassis name="90001" type="frame" year="1900" death="1920" skill="0" picture="TestFrame1900.dds" reliability="45" weight="55"/>
+
+        <chassis name="90002" type="frame" year="1910" death="5050" skill="15" picture="TestFrame1910.dds" reliability="60" performance="35"/>
+
+        <chassis name="90003" type="frame" year="1920" death="5050" skill="25" extraField="keep-me" reliability="70"/>
+
+        <suspension name="90101" type="suspension" year="1900" death="5050" skill="0" picture="FrontLeaf.dds" comfort="40" performance="20"/>
+
+        <drivetrain name="90201" type="drivetrain" year="1900" death="5050" skill="0" picture="RWD.dds" reliability="50"/>
+
+    </ChassisComponents>
+
+    <EngineComponents>
+
+        <layout name="91001" type="layout" year="1898" death="5050" skill="10" picture="FlatLayout.dds" performance="35" reliability="50" smoothness="45"/>
+
+        <layout name="91004" type="layout" year="1890" death="5050" skill="5" picture="SingleLayout.dds" performance="15" reliability="40" smoothness="30"/>
+
+        <layout name="91005" type="layout" year="1910" death="5050" skill="15" picture="StraightLayout.dds" performance="45" reliability="55" smoothness="50"/>
+
+        <layout name="91003" type="layout" year="1920" death="5050" skill="20" picture="VLayout.dds" performance="55" reliability="45"/>
+
+        <cylinder name="91002" type="cylinder" year="1920" death="5050" skillReq="25" picture="TestCylinder.dds" cylinders="4" reliability="55"/>
+
+        <fuel name="91101" type="fuel" year="1900" death="5050" skill="0" picture="Gasoline.dds" fueleconomy="55" reliability="50"/>
+
+        <fuel name="91102" type="fuel" year="1925" death="5050" skill="15" picture="Diesel.dds" fueleconomy="65" performance="30"/>
+
+        <valve name="91201" type="valve" year="1900" death="5050" skill="0" picture="LHead.dds" reliability="60" performance="25"/>
+
+        <valve name="91202" type="valve" year="1915" death="5050" skill="20" picture="OHV.dds" performance="45" reliability="50"/>
+
+        <induction name="91301" type="induction" year="1900" death="5050" skill="0" picture="NaturallyAspirated.dds" fueleconomy="60" reliability="55"/>
+
+        <induction name="91302" type="induction" year="1930" death="5050" skill="30" picture="Supercharged.dds" performance="75" fueleconomy="35"/>
+
+    </EngineComponents>
+
+    <GearboxComponents>
+
+        <gearbox name="92001" type="transmission" year="1890" death="5050" skill="0" picture="TestManual.dds" reliability="55" fueleconomy="50"/>
+
+        <gearbox name="92002" type="transmission" year="1912" death="5050" skill="20" picture="TestSyncManual.dds" smoothness="60" performance="40"/>
+
+        <gear name="92101" type="gear" year="1900" death="5050" skill="0" picture="ThreeSpeed.dds" gears="3"/>
+
+        <gear name="92102" type="gear" year="1920" death="5050" skill="15" picture="FourSpeed.dds" gears="4"/>
+
+    </GearboxComponents>
+
+    <MiscSection>
+
+        <unknownPart name="93001" type="mystery" weirdStart="1905" picture="UnknownPart.dds"/>
+
+    </MiscSection>
+
+</Components>
+

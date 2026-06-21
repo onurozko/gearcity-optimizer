@@ -1,0 +1,31 @@
+====== Engine Game Mechanics ======
+
+===== Variables =====
+
+==== Sliders ====
+
+^ Variable ^ Description ^ ^ Variable ^ Description ^
+| **Slider_Layout_Bore ** | Sliders: Engine Design Layout => Bore | | **Slider_Layout_Stroke ** | Sliders: Engine Design Layout => Stroke |
+| **Slider_Layout_Length** | Sliders: Engine Design Layout => Length | | **Slider_Layout_Width** | Sliders: Engine Design Layout => Width |
+| **Slider_Layout_Displacement** | (Slider_Layout_Bore + Slider_Layout_Stroke) ÷ 2.0 | | **Slider_Layout_Weight** | Sliders: Engine Design Layout => Weight |
+| **Slider_Performance_Revolutions** | Sliders: Engine Design Performance => Revolutions | | **Slider_Performance_Torque** | Sliders: Engine Design Performance => Engine Torque |
+| **Slider_Performance_FuelEconomy** | Sliders: Engine Design Performance => Fuel Economy | | **Slider_DesignFocus_Performance** | Sliders: Engine Design Focus => Focus on Performance |
+| **Slider_DesignFocus_FuelEconomy** | Sliders: Engine Design Focus => Focus on Fuel Economy | | **Slider_DesignFocus_Dependability** | Sliders: Engine Design Focus => Focus on Dependability |
+| **Slider_DesignFocus_DesignPace ** | Sliders: Engine Design Focus => Development Pace | | **Slider_Technology_Materials** | Sliders: Engine Design Technology => Material Quality |
+| **Slider_Technology_Components** | Sliders: Engine Design Technology => Component Quality | | **Slider_Technology_Technologies** | Sliders: Engine Design Technology => Technology |
+| **Slider_Technology_Techniques** | Sliders: Engine Design Technology => Manufacturing Techniques |
+
+===== Specs =====
+
+==== Torque ====
+
+<code cpp>
+Torque = 100 + (25 * ((Slider_Performance_Torque - 0.4)*1.5))
+</code>
+
+==== Fuel Consumption ====
+
+<code cpp>
+FuelConsumption_MPG = 95 + ((55 * ex_1d0023p_year99) * (Slider_Performance_FuelEconomy+0.1)) +
+ (40 * ex_1d0023p_year99 * Slider_DesignFocus_FuelEconomy )
+</code>

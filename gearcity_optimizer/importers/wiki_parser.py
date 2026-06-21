@@ -723,6 +723,18 @@ def import_wiki_pages(
         page: len(sections) for page, sections in formula_index.items()
     }
 
+    from gearcity_optimizer.importers.wiki_knowledge_builder import build_wiki_knowledge
+
+    knowledge_summary = build_wiki_knowledge(
+        parsed_pages,
+        url_entries=entries,
+        output_dir=output_path,
+    )
+    summary["slider_registry_path"] = knowledge_summary.get("slider_registry_path")
+    summary["formula_effects_path"] = knowledge_summary.get("formula_effects_path")
+    summary["slider_count"] = knowledge_summary.get("slider_count", 0)
+    summary["formula_effect_count"] = knowledge_summary.get("effect_count", 0)
+
     if "vehicle_type_importance" in parsed_pages:
         vehicle_rows = extract_vehicle_type_importance(
             parsed_pages["vehicle_type_importance"]

@@ -1,0 +1,36 @@
+====== Vehicle Game Mechanics ======
+
+===== Variables =====
+
+==== Sliders ====
+
+^ Variable ^ Description ^ ^ Variable ^ Description ^
+| **Slider_Interior_Style** | Sliders: Interior => Style | | **Slider_Interior_Innovation** | Sliders: Interior => Innovation |
+| **Slider_Interior_Luxury** | Sliders: Interior => Luxury | | **Slider_Interior_Comfort** | Sliders: Interior => Comfort |
+| **Slider_Interior_Safety** | Sliders: Interior => Safety | | **Slider_Interior_Technology** | Sliders: Interior => Technology |
+| **Slider_Materials_MaterialQuality** | Sliders: Materials => Material Quality | | **Slider_Materials_Interior** | Sliders: Materials => Interior Quality |
+| **Slider_Materials_Paint** | Sliders: Materials => Paint Quality | | **Slider_Materials_Techniques** | Sliders: Materials => Manufacturing Techniques |
+| **Slider_Design_Style** | Sliders: Design Focus => Style Focus | | **Slider_Design_Luxury** | Sliders: Design Focus => Luxury Focus |
+| **Slider_Design_Safety** | Sliders: Design Focus => Safety Focus | | **Slider_Design_Cargo** | Sliders: Design Focus => Cargo Focus |
+| **Slider_Design_Dependability** | Sliders: Design Focus => Dependability | | **Slider_Design_DesignPace** | Sliders: Design Focus => Development Pace |
+| **Slider_Testing_Demographics** | Sliders: Testing => Market Demographics Testing | | **Slider_Testing_Performance** | Sliders: Testing => Performance Testing |
+| **Slider_Testing_FuelEconomy** | Sliders: Testing => Fuel Economy Testing | | **Slider_Testing_Comfort** | Sliders: Testing => Comfortability Testing |
+| **Slider_Testing_Utility** | Sliders: Testing => Utility Testing | | **Slider_Testing_Reliability** | Sliders: Testing => Reliability Testing |
+| **Slider_Demographics_Gender** | Sliders: Demographics => Gender | | **Slider_Demographics_Wealth** | Sliders: Demographics => Wealth |
+| **Slider_Demographics_Age** | Sliders: Demographics => Age | | | |
+
+===== Ratings =====
+
+==== Fuel Economy Rating ====
+
+<code cpp>
+Rating_Fuel = Selected_Engine.Fuel_Economy_Rating * 0.6
+Rating_Fuel = Rating_Fuel + Slider_Testing_FuelEconomy * 0.1
+</code>
+
+==== Dependability Rating ====
+
+<code cpp>
+Rating_Dependability = Selected_Chassis.Durability_Rating * 0.35
+Rating_Dependability = Rating_Dependability + Sliders_Design_Dependability * 0.1
+</code>

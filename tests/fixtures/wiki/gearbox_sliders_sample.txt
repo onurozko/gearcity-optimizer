@@ -1,0 +1,27 @@
+====== Gearbox Game Mechanics ======
+
+===== Variables =====
+
+==== Sliders ====
+
+^ Variable ^ Description ^ ^ Variable ^ Description ^
+| **Sliders_LowGear_Ratio** | Sliders: Specifications => Low-End Gearing | | **Sliders_HighGear_Ratio** | Sliders: Specifications => High-End Gearing |
+| **Sliders_Torque_Max_Input** | Sliders: Specifications => Maximum Torque Input | | **Sliders_Tech_Material** | Sliders: Technologies => Material Quality |
+| **Sliders_Tech_Components** | Sliders: Technologies => Component Quality | | **Sliders_Tech_Technology** | Sliders: Technologies => Technology |
+| **Sliders_Tech_Techniques** | Sliders: Technologies => Manufacturing Techniques | | **Sliders_Design_Ease** | Sliders: Design Focus => Shifting Ease |
+| **Sliders_Design_Dependability** | Sliders: Design Focus => Dependability | | **Sliders_Design_DesignPace** | Sliders: Design Focus => Development Pace |
+| **Sliders_Design_FuelEconomy** | Sliders: Design Focus => Fuel Economy | | **Sliders_Design_Performance** | Sliders: Design Focus => Performance |
+
+===== Ratings =====
+
+==== Fuel Rating ====
+
+<code cpp>
+Fuel_Rating = 100 - (20 * Sliders_Design_FuelEconomy)
+</code>
+
+==== Maximum Torque Support ====
+
+<code cpp>
+Max_Torque_Support = 10 * Number_Of_Gears + 75 * Sliders_Torque_Max_Input
+</code>

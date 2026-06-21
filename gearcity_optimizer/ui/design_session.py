@@ -29,7 +29,18 @@ SESSION_DEFAULTS = {
     "vehicle_skill": 0.0,
     "cost_mode": "Balanced",
     "optimization_depth": "Balanced",
+    "component_choice_mode": "Auto-pick components (experimental)",
 }
+
+COMPONENT_CHOICE_MODE_OPTIONS = (
+    "Auto-pick components (experimental)",
+    "Manual component selection",
+)
+
+AUTO_PICK_EXPERIMENTAL_LABEL = (
+    "Experimental: automatic component choice scoring is still being validated. "
+    "Review alternatives before copying the setup into GearCity."
+)
 
 
 @dataclass(frozen=True)
@@ -135,6 +146,28 @@ def render_optimizer_controls() -> None:
             key="optimization_depth",
             help="Quick uses the same heuristic with fewer refinements in future versions.",
         )
+    st.selectbox(
+        "Component choice mode",
+        options=list(COMPONENT_CHOICE_MODE_OPTIONS),
+        key="component_choice_mode",
+        help=(
+            "Auto-pick ranks available Components.xml choices using deterministic suitability "
+            "scoring. Manual mode lets you pick layout/fuel/frame/gearbox and optimize sliders "
+            "around those choices."
+        ),
+    )
+
+
+def is_manual_component_mode() -> bool:
+    """Return True when the user chose manual component selection."""
+    init_design_session_state()
+    return str(st.session_state.component_choice_mode).startswith("Manual")
+
+
+def is_auto_experimental_component_mode() -> bool:
+    """Return True when experimental auto-pick is enabled."""
+    init_design_session_state()
+    return str(st.session_state.component_choice_mode).startswith("Auto-pick")
 
 
 def availability_context_from_session(

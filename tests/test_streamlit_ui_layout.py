@@ -54,14 +54,15 @@ def test_tech_availability_no_recommendation_preview():
 
 
 def test_design_optimizer_separates_controls_from_predicted_outputs():
-    """Design Optimizer helpers should keep controls and predicted stats distinct."""
+    """Design Optimizer helpers should keep choices, controls, and predicted stats distinct."""
     source = Path(__file__).resolve().parents[1] / "gearcity_optimizer" / "ui" / "design_optimizer.py"
     text = source.read_text(encoding="utf-8")
-    assert "Actual controls to set" in text
+    assert "Recommended component choices" in text
+    assert "Recommended slider values" in text
     assert "Predicted output stats" in text
     assert "control_settings_for_section" in text
-    assert "result.predicted_outputs" in text
-    assert "Model-optimized real slider settings" in text
+    assert "result.slider_result.predicted_outputs" in text
+    assert "Model-optimized real slider settings" not in text
 
 
 def test_shared_session_state_used_by_both_tabs():
@@ -105,7 +106,7 @@ def test_shared_session_defaults_map_consistently():
     }
 
 
-def test_controls_csv_includes_section_and_slider_key():
+def test_controls_csv_includes_section_and_slider_key(wiki_model_paths):
     """CSV export should include all control settings with section metadata."""
     from gearcity_optimizer.core.models import VehicleType
     from gearcity_optimizer.reports.slider_optimizer import optimize_real_slider_settings, SliderOptimizationInput

@@ -227,7 +227,19 @@ Imported files are stored under `user_data/game_files/components/` (gitignored).
 
 The optimizer recommends **actual GearCity controllable inputs** (design focus sliders, bore/stroke, gear ratios, testing focus, etc.), then uses formula modules to **predict** output stats like torque, horsepower, and fuel economy. Output stats are never treated as sliders.
 
-Audit real controls:
+Slider definitions and formula influence maps are built from full GearCity Wiki mechanics pages during `setup-sources` / `import-wiki`. The Design Optimizer requires this source-backed model; it does not generate slider recommendations from screenshot labels or hardcoded fallbacks.
+
+If wiki artifacts are missing, the optimizer shows a warning and disables exact slider optimization. Screenshot-validated labels remain available in the audit view only (`labels only, no formula effects`).
+
+Rebuild wiki slider/formula knowledge from cached wiki pages:
+
+```powershell
+gearcity-optimizer build-slider-registry
+gearcity-optimizer build-formula-effects
+gearcity-optimizer formula-effects-audit
+```
+
+Audit source-backed slider definitions and formula influence:
 
 ```powershell
 gearcity-optimizer slider-audit

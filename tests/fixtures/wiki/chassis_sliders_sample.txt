@@ -1,0 +1,25 @@
+====== Chassis Game Mechanics ======
+
+===== Variables =====
+
+==== Sliders ====
+
+^ Variable ^ Description ^ ^ Variable ^ Description ^
+| **Slider_FD_Length** | Sliders: Frame Dimensions => Wheelbase (Length) | | **Slider_FD_Width** | Sliders: Frame Dimensions => Track (Width) |
+| **Slider_FD_Height** | Sliders: Frame Dimensions => Frame Height | | **Slider_FD_Weight** | Sliders: Frame Dimensions => Frame Weight |
+| **Slider_FD_ENG_Width** | Sliders: Frame Dimensions => Maximum Supported Engine Width | | **Slider_FD_ENG_Length** | Sliders: Frame Dimensions => Maximum Supported Engine Length |
+| **Slider_SUS_Stability** | Sliders: Suspension => Stability | | **Slider_SUS_Comfort** | Sliders: Suspension => Ride Comfort |
+| **Slider_SUS_Performance** | Sliders: Suspension => Performance | | **Slider_SUS_Braking** | Sliders: Suspension => Braking |
+| **Slider_SUS_Durability** | Sliders: Suspension => Durability | | **Slider_DE_Performance** | Sliders: Design Focus => Design Performance |
+| **Slider_DE_Control** | Sliders: Design Focus => Design Ride Control | | **Slider_DE_Str** | Sliders: Design Focus => Design Strength |
+| **Slider_DE_Depend** | Sliders: Design Focus => Design Dependability | | **Slider_DesignPace** | Sliders: Design Focus => Development Pace |
+| **Slider_TECH_Materials** | Sliders: Component Quality => Material Quality | | **Slider_TECH_Compoenents** | Sliders: Component Quality => Component Quality |
+| **Slider_TECH_Techniques** | Sliders: Component Quality => Manufacturing Techniques | | **Slider_TECH_Tech** | Sliders: Component Quality => Technology |
+
+===== Specs =====
+
+==== Chassis Length ====
+
+<code cpp>
+Chassis_Length = 100 + (50 * Slider_FD_Length)
+</code>

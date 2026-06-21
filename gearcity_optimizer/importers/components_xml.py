@@ -185,6 +185,7 @@ def _parse_leaf_component(
     source_path: Path | None,
 ) -> ComponentTech:
     attributes = dict(node.attrib)
+    attributes["_element_tag"] = node.tag
     subcategory = attributes.get("type") or node.tag
     start_year = _pick_int(attributes, START_YEAR_KEYS)
     end_year = _normalize_end_year(_pick_int(attributes, END_YEAR_KEYS))
@@ -431,3 +432,20 @@ def catalog_summary(catalog: ComponentCatalog) -> dict[str, int]:
     for component in catalog.components:
         summary[component.category] = summary.get(component.category, 0) + 1
     return summary
+
+
+# Re-export component choice helpers for a single import surface.
+from gearcity_optimizer.importers.component_choices import (  # noqa: E402
+    ComponentChoice,
+    ComponentChoiceCatalog,
+    ComponentsSchemaAudit,
+    SchemaAuditSection,
+    audit_components_schema,
+    choice_type_label,
+    component_tech_to_choice,
+    format_schema_audit_report,
+    get_available_component_choices,
+    infer_choice_type,
+    load_component_choice_catalog,
+    parse_component_choice_catalog,
+)

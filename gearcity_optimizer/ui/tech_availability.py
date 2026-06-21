@@ -16,8 +16,13 @@ from gearcity_optimizer.importers.component_sources import (
 )
 from gearcity_optimizer.importers.components_xml import (
     ComponentsValidationError,
+    audit_components_schema,
     catalog_summary,
+    choice_type_label,
+    component_tech_to_choice,
+    format_schema_audit_report,
     load_imported_components_catalog,
+    parse_component_choice_catalog,
     validate_components_xml,
 )
 from gearcity_optimizer.ui.design_session import (
@@ -32,9 +37,9 @@ EXAMPLE_COMPONENTS_PATH = (
 )
 
 DESIGN_OPTIMIZER_NOTE = (
-    "Use **Design Optimizer** for exact recommended design controls. This tab only "
-    "shows which technologies/components are available for the selected year and "
-    "research skills."
+    "Use **Design Optimizer** for exact recommended component choices and slider controls. "
+    "This tab shows which technologies/components are available for the selected year and "
+    "research skills. Design Optimizer uses this same Components.xml data."
 )
 
 
@@ -45,9 +50,11 @@ def tech_availability_empty_state_message() -> str:
 
 def _row_dict(row) -> dict[str, object]:
     component = row.component
+    choice = component_tech_to_choice(component)
     return {
         "name": component.name,
         "category": component.category,
+        "choice type": choice_type_label(choice.choice_type),
         "subcategory": component.subcategory or "",
         "start year": component.start_year,
         "end year": component.end_year,
@@ -55,6 +62,7 @@ def _row_dict(row) -> dict[str, object]:
         "skill category": row.skill_category,
         "availability status": row.status,
         "reason": row.reason,
+        "classification confidence": choice.confidence,
     }
 
 
@@ -150,6 +158,12 @@ def render_tech_availability_tab(
     if summary:
         summary_text = ", ".join(f"{key}: {count}" for key, count in sorted(summary.items()))
         st.caption(f"Detected categories: {summary_text}")
+
+    choice_catalog = parse_component_choice_catalog(catalog)
+    if choice_catalog.warnings:
+        with st.expander("Schema / classification warnings", expanded=False):
+            for warning in choice_catalog.warnings:
+                st.warning(warning)
 
     render_availability_tables(context)
 
