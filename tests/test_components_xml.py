@@ -143,7 +143,7 @@ def test_streamlit_helpers_handle_missing_components_gracefully(
 ):
     assert handle_missing_components_catalog() is True
     message = tech_availability_empty_state_message()
-    assert "No Components.xml has been imported yet" in message
+    assert "Components.xml has not been imported" in message
 
 
 def test_cost_mode_enum_accepts_cheap_balanced_luxury_only():

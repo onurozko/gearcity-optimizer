@@ -115,10 +115,16 @@ from gearcity_optimizer.core.terminology import (
     list_terminology_entries,
 )
 from gearcity_optimizer.core.terminology_verification import verify_term_search
-from gearcity_optimizer.reports.part_recommender import (
-    RecommendationInput,
-    build_recommendation_result,
+from gearcity_optimizer.core.slider_registry import (
+    list_sliders,
+    registry_sections,
+    validate_registry,
 )
+from gearcity_optimizer.reports.slider_optimizer import (
+    SliderOptimizationInput,
+    optimize_real_slider_settings,
+)
+from gearcity_optimizer.ui.slider_audit import format_slider_audit_row
 from gearcity_optimizer.reports.design_checklist import (
     build_design_checklist,
     format_checklist_for_cli,
@@ -147,6 +153,8 @@ SUBCOMMANDS = {
     "group-vehicle-types",
     "import-components",
     "tech-availability",
+    "slider-audit",
+    "optimize-sliders",
 }
 
 UNKNOWN_SUBCOMMAND = "__unknown__"
@@ -1078,10 +1086,103 @@ def handle_tech_availability(args: argparse.Namespace) -> int:
             catalog=catalog,
         )
         print(f"\nRecommendation preview for {args.vehicle_type} ({args.cost_mode})\n")
-        for bullet in result.recommended_focus:
-            print(f"- {bullet}")
+        print(result.strategy_summary)
+        print(f"\nAvoid:")
+        for item in result.avoid:
+            print(f"- {item}")
+        print(f"\n{result.gearbox_guidance}")
         for note in result.limitations:
             print(f"  note: {note}")
+
+    return 0
+
+
+def handle_slider_audit(args: argparse.Namespace) -> int:
+    """Print the real controllable slider/input registry."""
+    warnings = validate_registry()
+    section = args.section
+    sliders = list_sliders(section=section)
+
+    print("\nReal GearCity slider/input audit\n")
+    if section:
+        print(f"Section filter: {section}")
+    else:
+        print(f"Sections: {', '.join(registry_sections())}")
+    print(f"Entries: {len(sliders)}\n")
+
+    for warning in warnings:
+        print(f"  warning: {warning}")
+
+    for slider in sliders:
+        row = format_slider_audit_row(slider)
+        print(f"- {row['key']} ({row['section']})")
+        print(f"  label: {row['label']}")
+        print(f"  formula variable: {row['formula variable']}")
+        print(f"  range: {row['range']}")
+        print(f"  affected outputs: {row['affected outputs']}")
+        print(f"  confidence: {row['confidence']}")
+        print(f"  source: {row['source']}")
+    return 0
+
+
+def handle_optimize_sliders(args: argparse.Namespace) -> int:
+    """Recommend real slider settings and show predicted output stats."""
+    try:
+        validate_year_input(args.year)
+    except ValueError as exc:
+        raise SystemExit(f"Error: {exc}") from exc
+
+    vehicle_types = load_vehicle_types(args.vehicle_types_file)
+    if args.vehicle_type not in vehicle_types:
+        raise SystemExit(f"Unknown vehicle type: {args.vehicle_type!r}")
+
+    vehicle_type = vehicle_types[args.vehicle_type]
+    result = optimize_real_slider_settings(
+        SliderOptimizationInput(
+            vehicle_type=vehicle_type,
+            year=args.year,
+            cost_mode=args.cost_mode,
+            chassis_skill=args.chassis_skill,
+            engine_skill=args.engine_skill,
+            gearbox_skill=args.gearbox_skill,
+            vehicle_skill=args.vehicle_skill,
+            depth=args.depth,
+        )
+    )
+
+    print(f"\nModel-optimized slider settings for {args.vehicle_type} ({args.cost_mode})\n")
+    print("Actual controls to set:\n")
+    current_section = None
+    for setting in result.control_settings:
+        if setting.section != current_section:
+            current_section = setting.section
+            print(f"[{current_section}]")
+        print(
+            f"  {setting.label}: {setting.value} "
+            f"({setting.formula_variable or 'n/a'}, {setting.confidence})"
+        )
+        print(f"    reason: {setting.reason}")
+
+    print("\nPredicted output stats:\n")
+    for output in result.predicted_outputs:
+        proxy = " [proxy]" if output.is_proxy else ""
+        print(
+            f"  {output.label}: {output.value:.2f} "
+            f"(importance {output.target_weight:.3f}){proxy}"
+        )
+
+    print("\nTradeoffs:")
+    for item in result.tradeoffs:
+        print(f"  - {item}")
+
+    print("\nLimitations:")
+    for item in result.limitations:
+        print(f"  - {item}")
+
+    if result.warnings:
+        print("\nWarnings:")
+        for item in result.warnings:
+            print(f"  - {item}")
 
     return 0
 
@@ -1607,6 +1708,74 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum rows to print per section (default: 25)",
     )
 
+    slider_audit_parser = subparsers.add_parser(
+        "slider-audit",
+        help="List real controllable GearCity sliders/inputs from the formula registry",
+    )
+    slider_audit_parser.add_argument(
+        "--section",
+        default=None,
+        choices=["chassis", "engine", "gearbox", "vehicle", "testing"],
+        help="Optional section filter",
+    )
+
+    optimize_sliders_parser = subparsers.add_parser(
+        "optimize-sliders",
+        help="Recommend real slider values and predict output stats",
+    )
+    optimize_sliders_parser.add_argument(
+        "--vehicle-type",
+        required=True,
+        help="Vehicle type name",
+    )
+    optimize_sliders_parser.add_argument(
+        "--year",
+        type=int,
+        default=1900,
+        help="Game year (minimum 1900)",
+    )
+    optimize_sliders_parser.add_argument(
+        "--cost-mode",
+        default="balanced",
+        choices=["cheap", "balanced", "luxury"],
+        help="Cost mode objective",
+    )
+    optimize_sliders_parser.add_argument(
+        "--chassis-skill",
+        type=float,
+        default=0.0,
+        help="Chassis design skill (0-100)",
+    )
+    optimize_sliders_parser.add_argument(
+        "--engine-skill",
+        type=float,
+        default=0.0,
+        help="Engine design skill (0-100)",
+    )
+    optimize_sliders_parser.add_argument(
+        "--gearbox-skill",
+        type=float,
+        default=0.0,
+        help="Gearbox design skill (0-100)",
+    )
+    optimize_sliders_parser.add_argument(
+        "--vehicle-skill",
+        type=float,
+        default=0.0,
+        help="Vehicle/coachwork design skill (0-100)",
+    )
+    optimize_sliders_parser.add_argument(
+        "--depth",
+        default="balanced",
+        choices=["quick", "balanced", "thorough"],
+        help="Optimization depth",
+    )
+    optimize_sliders_parser.add_argument(
+        "--vehicle-types-file",
+        default=_default_data_path(DEFAULT_VEHICLE_TYPES),
+        help="Path to vehicle types CSV",
+    )
+
     group_vehicle_types_parser = subparsers.add_parser(
         "group-vehicle-types",
         help="Cluster vehicle types by similar design-stat priorities",
@@ -1662,6 +1831,8 @@ def build_parser() -> argparse.ArgumentParser:
         "events_summary": events_summary_parser,
         "import_components": import_components_parser,
         "tech_availability": tech_availability_parser,
+        "slider_audit": slider_audit_parser,
+        "optimize_sliders": optimize_sliders_parser,
         "group_vehicle_types": group_vehicle_types_parser,
     }
     return parser
@@ -1694,6 +1865,8 @@ def main(argv: list[str] | None = None) -> int:
     events_summary_parser = cli_parsers["events_summary"]
     import_components_parser = cli_parsers["import_components"]
     tech_availability_parser = cli_parsers["tech_availability"]
+    slider_audit_parser = cli_parsers["slider_audit"]
+    optimize_sliders_parser = cli_parsers["optimize_sliders"]
     group_vehicle_types_parser = cli_parsers["group_vehicle_types"]
 
     if subcommand == UNKNOWN_SUBCOMMAND:
@@ -1817,6 +1990,16 @@ def main(argv: list[str] | None = None) -> int:
         tech_availability_parser.set_defaults(func=handle_tech_availability)
         args = tech_availability_parser.parse_args(remaining)
         return handle_tech_availability(args)
+
+    if subcommand == "slider-audit":
+        slider_audit_parser.set_defaults(func=handle_slider_audit)
+        args = slider_audit_parser.parse_args(remaining)
+        return handle_slider_audit(args)
+
+    if subcommand == "optimize-sliders":
+        optimize_sliders_parser.set_defaults(func=handle_optimize_sliders)
+        args = optimize_sliders_parser.parse_args(remaining)
+        return handle_optimize_sliders(args)
 
     parser.print_help()
     return 1

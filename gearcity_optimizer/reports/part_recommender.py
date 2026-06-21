@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from gearcity_optimizer.core.component_priorities import (
     calculate_component_priorities,
+    enrich_priorities_for_display,
     format_stat_label,
+    get_adjusted_vehicle_weights,
 )
 from gearcity_optimizer.core.cost_mode import COST_MODE_DESCRIPTIONS, CostMode, parse_cost_mode
 from gearcity_optimizer.core.models import VehicleType
@@ -16,6 +19,54 @@ from gearcity_optimizer.importers.components_xml import (
     filter_available_components,
     validate_year_input,
 )
+
+WORK_NAME_HINTS = (
+    "truck",
+    "van",
+    "utility",
+    "commercial",
+    "pickup",
+    "hauler",
+)
+
+RATING_DISPLAY = {
+    "performance": "performance",
+    "drivability": "drivability",
+    "luxury": "luxury",
+    "safety": "safety",
+    "fuel": "fuel economy",
+    "power": "power/torque",
+    "cargo": "cargo/utility",
+    "dependability": "dependability",
+}
+
+FOCUS_DEDUPE_KEYS: dict[str, str] = {
+    "max torque": "max_torque",
+    "maximum torque support": "max_torque",
+    "design focus: dependability": "dependability",
+    "dependability": "dependability",
+    "fuel economy rating": "fuel_economy",
+    "fuel economy": "fuel_economy",
+    "testing: fuel economy": "fuel_economy",
+    "engine reliability rating": "reliability",
+    "gearbox reliability rating": "reliability",
+    "reliability rating": "reliability",
+    "reliability": "reliability",
+    "testing: reliability": "reliability",
+    "chassis durability rating": "durability",
+    "durability rating": "durability",
+    "manufacturing cost": "manufacturing_cost",
+    "comfort rating": "comfort",
+    "smoothness rating": "smoothness",
+    "performance rating": "performance",
+}
+
+PREFERRED_FOCUS_LABELS: dict[str, str] = {
+    "max torque": "Maximum Torque Support",
+    "maximum torque support": "Maximum Torque Support",
+    "dependability": "Design Focus: Dependability",
+    "fuel economy": "Fuel Economy Rating",
+}
 
 
 @dataclass(frozen=True)
@@ -29,6 +80,14 @@ class RecommendationInput:
     engine_skill: float
     gearbox_skill: float
     vehicle_skill: float
+
+
+@dataclass(frozen=True)
+class ComponentFocusSection:
+    """Focus priorities and cost-mode guidance for one component area."""
+
+    top_priorities: list[str]
+    cost_mode_adjustment: str
 
 
 @dataclass(frozen=True)
@@ -46,14 +105,59 @@ class RecommendationProfile:
 
 @dataclass(frozen=True)
 class RecommendationResult:
-    """V1 recommendation output with availability summary and focus bullets."""
+    """Structured recommendation output for UI and CLI previews."""
 
     available_component_count: int
     unavailable_component_count: int
     priority_profile: RecommendationProfile
+    strategy_summary: str
+    chassis_section: ComponentFocusSection
+    engine_section: ComponentFocusSection
+    gearbox_section: ComponentFocusSection
+    design_testing_focus: list[str]
+    avoid: list[str]
+    gearbox_guidance: str
     cost_mode_notes: list[str]
-    recommended_focus: list[str]
     limitations: list[str] = field(default_factory=list)
+    recommended_focus: list[str] = field(default_factory=list)
+
+
+def parse_cost_mode_display(label: str) -> str:
+    """Normalize a display cost mode label to cheap/balanced/luxury."""
+    return parse_cost_mode(label.strip().lower()).value
+
+
+def is_work_or_utility_focused(vehicle_type: VehicleType) -> bool:
+    """Return True when the vehicle type emphasizes work, cargo, or utility."""
+    cargo = vehicle_type.cargo
+    power = vehicle_type.power
+    name_lower = vehicle_type.name.lower()
+    name_hint = any(hint in name_lower for hint in WORK_NAME_HINTS)
+
+    if name_hint and (cargo >= 0.55 or power >= 0.55):
+        return True
+
+    return cargo >= 0.75 or power >= 0.75
+
+
+def normalize_focus_labels(labels: list[str]) -> list[str]:
+    """Remove duplicate focus labels that refer to the same concept."""
+    seen_keys: set[str] = set()
+    normalized: list[str] = []
+    for label in labels:
+        lowered = label.lower().strip()
+        display = PREFERRED_FOCUS_LABELS.get(lowered, label)
+        key = _focus_dedupe_key(display)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        normalized.append(display)
+    return normalized
+
+
+def _focus_dedupe_key(label: str) -> str:
+    lowered = label.lower().strip()
+    return FOCUS_DEDUPE_KEYS.get(lowered, lowered)
 
 
 def _skill_levels_from_input(inputs: RecommendationInput) -> dict[str, float]:
@@ -65,6 +169,17 @@ def _skill_levels_from_input(inputs: RecommendationInput) -> dict[str, float]:
     }
 
 
+def _top_priority_labels(
+    priorities: dict[str, list],
+    component: str,
+    *,
+    limit: int = 4,
+) -> list[str]:
+    items = enrich_priorities_for_display(component, priorities.get(component, []))
+    labels = [format_stat_label(component, item.stat) for item in items[: limit + 2]]
+    return normalize_focus_labels(labels)[:limit]
+
+
 def recommendation_profile(
     vehicle_type: VehicleType,
     cost_mode: CostMode | str,
@@ -73,41 +188,10 @@ def recommendation_profile(
     mode = parse_cost_mode(cost_mode.value if isinstance(cost_mode, CostMode) else cost_mode)
     priorities = calculate_component_priorities(vehicle_type)
 
-    def top_labels(component: str, limit: int = 4) -> list[str]:
-        items = priorities.get(component, [])
-        return [
-            format_stat_label(component, item.stat)
-            for item in items[:limit]
-        ]
-
-    chassis_focus = top_labels("chassis")
-    engine_focus = top_labels("engine")
-    gearbox_focus = top_labels("gearbox")
-    vehicle_focus = top_labels("vehicle_design")
-
-    if mode is CostMode.CHEAP:
-        cheap_bias = [
-            "manufacturing cost",
-            "dependability",
-            "reliability",
-            "fuel economy",
-        ]
-        chassis_focus = _merge_focus(chassis_focus, cheap_bias, limit=5)
-        engine_focus = _merge_focus(engine_focus, cheap_bias, limit=5)
-        gearbox_focus = _merge_focus(gearbox_focus, ["max torque", "reliability"], limit=5)
-        vehicle_focus = _merge_focus(vehicle_focus, ["dependability", "cargo"], limit=5)
-    elif mode is CostMode.LUXURY:
-        luxury_bias = [
-            "comfort",
-            "smoothness",
-            "luxury",
-            "safety",
-            "material quality",
-        ]
-        chassis_focus = _merge_focus(chassis_focus, luxury_bias, limit=5)
-        engine_focus = _merge_focus(engine_focus, luxury_bias, limit=5)
-        gearbox_focus = _merge_focus(gearbox_focus, ["comfort", "performance"], limit=5)
-        vehicle_focus = _merge_focus(vehicle_focus, luxury_bias, limit=5)
+    chassis_focus = _top_priority_labels(priorities, "chassis")
+    engine_focus = _top_priority_labels(priorities, "engine")
+    gearbox_focus = _top_priority_labels(priorities, "gearbox")
+    vehicle_focus = _top_priority_labels(priorities, "vehicle_design")
 
     serialized_priorities = {
         component: [(item.stat, item.priority) for item in items]
@@ -125,18 +209,169 @@ def recommendation_profile(
     )
 
 
-def _merge_focus(primary: list[str], secondary: list[str], *, limit: int) -> list[str]:
-    merged: list[str] = []
+def _top_vehicle_rating_names(vehicle_type: VehicleType, limit: int = 3) -> list[str]:
+    weights = get_adjusted_vehicle_weights(vehicle_type)
+    ranked = sorted(
+        ((name, value) for name, value in weights.items() if name != "quality"),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+    return [RATING_DISPLAY.get(name, name) for name, _ in ranked[:limit]]
+
+
+def build_strategy_summary(vehicle_type: VehicleType, cost_mode: CostMode) -> str:
+    """Return a short plain-English strategy paragraph."""
+    top = _top_vehicle_rating_names(vehicle_type)
+    top_text = ", ".join(top)
+    name = vehicle_type.name
+
+    if cost_mode is CostMode.CHEAP:
+        return (
+            f"Build this as a practical low-cost {name.lower()}. Prioritize "
+            f"{top_text}, and keep spending under control. Avoid expensive luxury, "
+            f"racing, or over-advanced tech unless this vehicle type strongly needs it."
+        )
+    if cost_mode is CostMode.LUXURY:
+        return (
+            f"Build this {name.lower()} with room for higher-end choices. Keep "
+            f"{top_text} as the core strengths, but allow more comfort, smoothness, "
+            f"safety, material quality, and performance where they support the vehicle type."
+        )
+    return (
+        f"Build this as a balanced {name.lower()}. Focus spending on {top_text}, "
+        f"the stats this vehicle type cares about most, without extreme cost cutting "
+        f"or unnecessary luxury overspend."
+    )
+
+
+def _component_cost_mode_adjustment(
+    component: str,
+    cost_mode: CostMode,
+    vehicle_type: VehicleType,
+) -> str:
+    work_focused = is_work_or_utility_focused(vehicle_type)
+
+    if component == "chassis":
+        if cost_mode is CostMode.CHEAP:
+            return (
+                "Cheap: avoid expensive or overbuilt chassis choices unless they "
+                "directly improve your top priorities."
+            )
+        if cost_mode is CostMode.LUXURY:
+            return (
+                "Luxury: allow stronger comfort, safety, and material quality if "
+                "they support the vehicle type."
+            )
+        return "Balanced: spend on chassis strengths that match this vehicle type most."
+
+    if component == "engine":
+        if cost_mode is CostMode.CHEAP:
+            return (
+                "Cheap: prefer reliable and efficient engines over high power unless "
+                "power is a top vehicle-type priority."
+            )
+        if cost_mode is CostMode.LUXURY:
+            return (
+                "Luxury: allow smoother, stronger engines when they improve comfort "
+                "or performance priorities."
+            )
+        return "Balanced: match engine spending to the vehicle type's top ratings."
+
+    if component == "gearbox":
+        if cost_mode is CostMode.CHEAP:
+            if work_focused:
+                return (
+                    "Cheap: match gearbox torque support to the engine, but avoid "
+                    "capacity far beyond what the engine needs."
+                )
+            return (
+                "Cheap: do not overbuild torque capacity far beyond engine needs."
+            )
+        if cost_mode is CostMode.LUXURY:
+            return (
+                "Luxury: allow smoother, more refined gearbox choices when comfort "
+                "or performance matter."
+            )
+        return "Balanced: enough torque support and reliability without unnecessary overspec."
+
+    return ""
+
+
+def build_gearbox_guidance(vehicle_type: VehicleType, cost_mode: CostMode) -> str:
+    """Return gearbox torque guidance tailored to the vehicle type."""
+    if is_work_or_utility_focused(vehicle_type):
+        return (
+            "Gearbox max torque support matters for this work-focused vehicle type. "
+            "Match the engine, but avoid far more capacity than you need."
+        )
+    return (
+        "Gearbox max torque support should safely match the engine, but do not "
+        "overbuild it unnecessarily."
+    )
+
+
+def build_avoid_list(vehicle_type: VehicleType, cost_mode: CostMode) -> list[str]:
+    """Return things to avoid based on vehicle type and cost mode."""
+    weights = get_adjusted_vehicle_weights(vehicle_type)
+    avoids: list[str] = []
+
+    if cost_mode is CostMode.CHEAP:
+        if weights.get("fuel", 0.0) >= 0.45:
+            avoids.append("Avoid oversized engines if fuel economy matters.")
+        if weights.get("luxury", 0.0) < 0.55:
+            avoids.append(
+                "Avoid luxury-heavy spending unless luxury is a top vehicle-type priority."
+            )
+        avoids.append(
+            "Avoid gearbox torque capacity far beyond the selected engine's needs."
+        )
+        if weights.get("performance", 0.0) < 0.55:
+            avoids.append(
+                "Avoid racing or performance-focused tech if performance priority is low."
+            )
+        if weights.get("cargo", 0.0) < 0.55:
+            avoids.append(
+                "Avoid utility-first chassis or drivetrain overspend unless cargo matters."
+            )
+    elif cost_mode is CostMode.LUXURY:
+        avoids.append("Avoid cutting comfort or safety so aggressively that luxury goals suffer.")
+        avoids.append("Avoid cheap-feeling materials if material quality supports the vehicle type.")
+        if weights.get("performance", 0.0) < 0.45:
+            avoids.append("Avoid pure performance overspend if performance is not a core priority.")
+    else:
+        avoids.append("Avoid extreme cost cutting in areas the vehicle type values most.")
+        avoids.append("Avoid luxury overspend in areas with low vehicle-type importance.")
+        avoids.append("Avoid mismatched gearbox torque support relative to the engine.")
+
+    return normalize_avoid_list(avoids)[:5]
+
+
+def normalize_avoid_list(items: list[str]) -> list[str]:
+    """Remove near-duplicate avoid guidance."""
     seen: set[str] = set()
-    for label in primary + secondary:
-        key = label.lower()
+    result: list[str] = []
+    for item in items:
+        key = re.sub(r"\s+", " ", item.lower().strip())
         if key in seen:
             continue
         seen.add(key)
-        merged.append(label)
-        if len(merged) >= limit:
-            break
-    return merged
+        result.append(item)
+    return result
+
+
+def _maybe_append_torque_note(
+    engine_focus: list[str],
+    vehicle_type: VehicleType,
+) -> list[str]:
+    """Add a conditional torque note without duplicating Torque in the list."""
+    labels = list(engine_focus)
+    keys = {_focus_dedupe_key(label) for label in labels}
+    weights = get_adjusted_vehicle_weights(vehicle_type)
+    if "torque" in keys:
+        return labels
+    if weights.get("power", 0.0) >= 0.55 or weights.get("cargo", 0.0) >= 0.55:
+        labels.append("Torque if useful for this vehicle type")
+    return labels
 
 
 def build_recommendation_result(
@@ -145,7 +380,7 @@ def build_recommendation_result(
     inputs: RecommendationInput,
     catalog: ComponentCatalog | None,
 ) -> RecommendationResult:
-    """Produce a v1 recommendation summary without exact part selection."""
+    """Produce a structured recommendation summary without exact part selection."""
     validate_year_input(inputs.year)
     profile = recommendation_profile(vehicle_type, inputs.cost_mode)
     skill_levels = _skill_levels_from_input(inputs)
@@ -153,16 +388,40 @@ def build_recommendation_result(
     available_count = 0
     unavailable_count = 0
     if catalog is not None:
-        available = filter_available_components(catalog, inputs.year, skill_levels)
-        available_count = len(available)
+        available_count = len(
+            filter_available_components(catalog, inputs.year, skill_levels)
+        )
         _, locked = classify_components(catalog, inputs.year, skill_levels)
         unavailable_count = len(locked)
 
-    cost_mode_notes = [profile.cost_mode_description]
-    recommended_focus = _recommended_focus_bullets(vehicle_type.name, profile)
+    mode = profile.cost_mode
+    strategy = build_strategy_summary(vehicle_type, mode)
+    gearbox_guidance = build_gearbox_guidance(vehicle_type, mode)
+
+    chassis_section = ComponentFocusSection(
+        top_priorities=profile.chassis_focus,
+        cost_mode_adjustment=_component_cost_mode_adjustment(
+            "chassis", mode, vehicle_type
+        ),
+    )
+    engine_section = ComponentFocusSection(
+        top_priorities=_maybe_append_torque_note(profile.engine_focus, vehicle_type),
+        cost_mode_adjustment=_component_cost_mode_adjustment(
+            "engine", mode, vehicle_type
+        ),
+    )
+    gearbox_section = ComponentFocusSection(
+        top_priorities=profile.gearbox_focus,
+        cost_mode_adjustment=_component_cost_mode_adjustment(
+            "gearbox", mode, vehicle_type
+        ),
+    )
+
+    design_testing = normalize_focus_labels(profile.vehicle_focus)
+    avoid = build_avoid_list(vehicle_type, mode)
     limitations = [
-        "Available tech has been filtered by year and skill. Exact best-part "
-        "selection is experimental until Components.xml category parsing is verified.",
+        "Exact best-part selection is experimental until Components.xml category "
+        "and stat parsing is fully verified.",
     ]
     if catalog is None:
         limitations.append(
@@ -173,42 +432,32 @@ def build_recommendation_result(
         available_component_count=available_count,
         unavailable_component_count=unavailable_count,
         priority_profile=profile,
-        cost_mode_notes=cost_mode_notes,
-        recommended_focus=recommended_focus,
+        strategy_summary=strategy,
+        chassis_section=chassis_section,
+        engine_section=engine_section,
+        gearbox_section=gearbox_section,
+        design_testing_focus=design_testing,
+        avoid=avoid,
+        gearbox_guidance=gearbox_guidance,
+        cost_mode_notes=[profile.cost_mode_description],
         limitations=limitations,
+        recommended_focus=_legacy_focus_lines(inputs, profile, strategy, avoid),
     )
 
 
-def _recommended_focus_bullets(
-    vehicle_type_name: str,
+def _legacy_focus_lines(
+    inputs: RecommendationInput,
     profile: RecommendationProfile,
+    strategy: str,
+    avoid: list[str],
 ) -> list[str]:
-    """Return human-readable focus bullets for v1 output."""
-    bullets = [
-        f"Vehicle type: {vehicle_type_name}",
-        f"Cost mode: {profile.cost_mode.value}",
-        f"Chassis focus: {', '.join(profile.chassis_focus) or 'general balance'}",
-        f"Engine focus: {', '.join(profile.engine_focus) or 'general balance'}",
-        f"Gearbox focus: {', '.join(profile.gearbox_focus) or 'general balance'}",
-        f"Vehicle/coachwork focus: {', '.join(profile.vehicle_focus) or 'general balance'}",
+    """Compact lines for CLI output."""
+    return [
+        strategy,
+        f"Chassis: {', '.join(profile.chassis_focus) or 'general balance'}",
+        f"Engine: {', '.join(profile.engine_focus) or 'general balance'}",
+        f"Gearbox: {', '.join(profile.gearbox_focus) or 'general balance'}",
+        f"Design/testing: {', '.join(profile.vehicle_focus) or 'general balance'}",
+        f"Avoid: {'; '.join(avoid[:3])}",
+        f"Year {inputs.year}, cost mode {profile.cost_mode.value}",
     ]
-
-    if profile.cost_mode is CostMode.CHEAP:
-        bullets.append(
-            "Cheap mode: prioritize torque, dependability, cargo/utility, and "
-            "manufacturing cost; avoid expensive luxury or smoothness tech unless "
-            "the vehicle type demands it."
-        )
-        bullets.append("Gearbox max torque support matters for work-focused types.")
-    elif profile.cost_mode is CostMode.LUXURY:
-        bullets.append(
-            "Luxury mode: keep core vehicle-type strengths, but allow better "
-            "smoothness, comfort, safety, and material quality where useful."
-        )
-    else:
-        bullets.append(
-            "Balanced mode: spend on the stats this vehicle type cares about most "
-            "while keeping cost under control."
-        )
-
-    return bullets

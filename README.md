@@ -223,6 +223,25 @@ will improve as Components.xml category and stat parsing is verified.
 
 Imported files are stored under `user_data/game_files/components/` (gitignored).
 
+### Real slider optimization
+
+The optimizer recommends **actual GearCity controllable inputs** (design focus sliders, bore/stroke, gear ratios, testing focus, etc.), then uses formula modules to **predict** output stats like torque, horsepower, and fuel economy. Output stats are never treated as sliders.
+
+Audit real controls:
+
+```powershell
+gearcity-optimizer slider-audit
+gearcity-optimizer slider-audit --section engine
+```
+
+Optimize real slider settings:
+
+```powershell
+gearcity-optimizer optimize-sliders --vehicle-type Sedan --year 1913 --cost-mode cheap --chassis-skill 15 --engine-skill 0 --gearbox-skill 0 --vehicle-skill 0 --depth balanced
+```
+
+In Streamlit, open the **Tech Availability** tab for tech filtering, the recommendation preview, model-optimized real slider settings, and the real slider/input audit expander.
+
 ## Component Naming Guide
 
 The Streamlit UI includes a **Naming Guide** tab with a compact naming standard for

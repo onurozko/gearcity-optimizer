@@ -45,6 +45,14 @@ from gearcity_optimizer.reports.naming_guide import (
     MISSING_NAMING_GUIDE_MESSAGE,
     load_naming_guide_markdown,
 )
+from gearcity_optimizer.ui.design_optimizer import (
+    render_design_optimizer_tab,
+    streamlit_tab_names,
+)
+from gearcity_optimizer.ui.design_session import (
+    init_design_session_state,
+    render_shared_year_skill_inputs,
+)
 from gearcity_optimizer.ui.historical_events import render_historical_events_tab
 from gearcity_optimizer.ui.tech_availability import render_tech_availability_tab
 
@@ -156,14 +164,29 @@ def render_app() -> None:
             else None
         )
 
-        year = st.number_input("Year", min_value=1899, max_value=2100, value=1901)
+        year = st.number_input(
+            "Checklist year",
+            min_value=1899,
+            max_value=2100,
+            value=1901,
+            help="Used for the Design Checklist tab only. Design Optimizer and Tech "
+            "Availability share their own year via session state.",
+        )
         generate = st.button("Generate Checklist", type="primary")
+
+        st.divider()
+        st.markdown("**Design Optimizer / Tech Availability**")
+        st.caption(
+            "Shared year and research skills. Changes here apply to both tabs."
+        )
+        render_shared_year_skill_inputs()
 
     if not vehicle_names or vehicle_type_name is None:
         st.warning("Load a valid vehicle types CSV to continue.")
         st.stop()
 
     vehicle_type = load_vehicle_type(types_path, vehicle_type_name)
+    init_design_session_state()
 
     if "checklist_report" not in st.session_state:
         st.session_state.checklist_report = generate_checklist(vehicle_type, int(year))
@@ -181,18 +204,17 @@ def render_app() -> None:
 
     st.markdown(f"### Selected vehicle type: **{vehicle_type_name}**")
 
-    tab_checklist, tab_priorities, tab_groups, tab_naming, tab_wiki, tab_packages, tab_events, tab_tech = st.tabs(
-        [
-            "Design Checklist",
-            "Component Priorities",
-            "Vehicle Type Groups",
-            "Naming Guide",
-            "Wiki / Formula Tools",
-            "Package Optimizer",
-            "Historical Events / Timeline",
-            "Tech Availability",
-        ]
-    )
+    (
+        tab_checklist,
+        tab_priorities,
+        tab_optimizer,
+        tab_tech,
+        tab_groups,
+        tab_packages,
+        tab_events,
+        tab_naming,
+        tab_wiki,
+    ) = st.tabs(streamlit_tab_names())
 
     with tab_checklist:
         st.subheader(f"{report.vehicle_type} Design Checklist, {report.year}")
@@ -320,6 +342,15 @@ def render_app() -> None:
                 st.markdown(f"Status: `{drivability_entry['status']}`")
                 st.markdown(drivability_entry["explanation"])
 
+    with tab_optimizer:
+        render_design_optimizer_tab(
+            vehicle_type_name=vehicle_type_name,
+            vehicle_type=vehicle_type,
+        )
+
+    with tab_tech:
+        render_tech_availability_tab()
+
     with tab_groups:
         st.subheader("Vehicle Type Groups")
         st.markdown(
@@ -435,9 +466,3 @@ def render_app() -> None:
 
     with tab_events:
         render_historical_events_tab()
-
-    with tab_tech:
-        render_tech_availability_tab(
-            vehicle_type_name=vehicle_type_name,
-            vehicle_type=vehicle_type,
-        )

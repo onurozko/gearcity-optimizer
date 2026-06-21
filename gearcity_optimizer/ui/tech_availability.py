@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import streamlit as st
 
+from gearcity_optimizer.core.component_availability import (
+    MISSING_CATALOG_WARNING,
+    ComponentAvailabilityContext,
+)
 from gearcity_optimizer.importers.component_sources import (
     components_missing_message,
     discover_components_source,
@@ -13,22 +17,24 @@ from gearcity_optimizer.importers.component_sources import (
 from gearcity_optimizer.importers.components_xml import (
     ComponentsValidationError,
     catalog_summary,
-    classify_components,
     load_imported_components_catalog,
     validate_components_xml,
 )
-from gearcity_optimizer.reports.part_recommender import (
-    RecommendationInput,
-    build_recommendation_result,
+from gearcity_optimizer.ui.design_session import (
+    availability_context_from_session,
+    get_design_session_values,
 )
 
-EMPTY_STATE_MESSAGE = (
-    "No Components.xml has been imported yet. Import your GearCity "
-    "Components.xml file to enable tech unlock and part availability analysis."
-)
+EMPTY_STATE_MESSAGE = MISSING_CATALOG_WARNING
 
 EXAMPLE_COMPONENTS_PATH = (
     r"D:\SteamLibrary\steamapps\common\GearCity\media\Scripts\Components.xml"
+)
+
+DESIGN_OPTIMIZER_NOTE = (
+    "Use **Design Optimizer** for exact recommended design controls. This tab only "
+    "shows which technologies/components are available for the selected year and "
+    "research skills."
 )
 
 
@@ -52,24 +58,88 @@ def _row_dict(row) -> dict[str, object]:
     }
 
 
+def render_availability_tables(context: ComponentAvailabilityContext) -> None:
+    """Render available and locked component tables from shared context."""
+    st.markdown(f"### Available components ({context.available_count})")
+    st.caption("Sub-components unlocked for the selected year and design skills.")
+    if context.available_rows:
+        st.dataframe(
+            [_row_dict(row) for row in context.available_rows],
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.write("No available components match the current filters.")
+
+    with st.expander(
+        f"Locked / unavailable components ({context.locked_count})",
+        expanded=False,
+    ):
+        st.caption(
+            "Components blocked by unlock year, required skill, expiry, or the "
+            "current category/name filter."
+        )
+        if context.locked_rows:
+            st.dataframe(
+                [_row_dict(row) for row in context.locked_rows],
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            st.write("No locked components for the current filters.")
+
+
 def render_tech_availability_tab(
     *,
     vehicle_type_name: str | None = None,
     vehicle_type=None,
 ) -> None:
     """Render Components.xml import and tech availability browser."""
+    del vehicle_type_name, vehicle_type
+
     st.subheader("Tech Availability")
     st.caption(
-        "Filter GearCity sub-components by unlock year and design skill. "
-        "Import your own Components.xml from your game install."
+        "Filter imported GearCity Components.xml entries by unlock year and "
+        "research/design skill."
     )
+    st.info(DESIGN_OPTIMIZER_NOTE)
+
+    _render_import_panel(key_prefix="tech", expanded=False)
 
     source = discover_components_source()
     catalog = load_imported_components_catalog()
 
-    if catalog is None:
-        st.info(EMPTY_STATE_MESSAGE)
-        _render_import_panel(key_prefix="empty", expanded=True)
+    st.caption(
+        "Year and research skills are set in the sidebar under "
+        "Design Optimizer / Tech Availability."
+    )
+    session = get_design_session_values()
+
+    col_category, col_search = st.columns([1, 2])
+    with col_category:
+        category_filter = st.selectbox(
+            "Category filter",
+            options=["all", "chassis", "engine", "gearbox", "vehicle", "unknown"],
+            key="tech_availability_category_filter",
+        )
+    with col_search:
+        name_search = st.text_input(
+            "Search by component name",
+            value="",
+            key="tech_availability_name_search",
+        )
+
+    category = None if category_filter == "all" else category_filter
+    context = availability_context_from_session(
+        session,
+        category_filter=category,
+        name_search=name_search or None,
+    )
+
+    if not context.catalog_loaded:
+        st.warning(EMPTY_STATE_MESSAGE)
+        for warning in context.warnings:
+            st.caption(warning)
         return
 
     st.success(
@@ -81,135 +151,7 @@ def render_tech_availability_tab(
         summary_text = ", ".join(f"{key}: {count}" for key, count in sorted(summary.items()))
         st.caption(f"Detected categories: {summary_text}")
 
-    col_year, col_chassis, col_engine = st.columns(3)
-    col_gearbox, col_vehicle, col_category = st.columns(3)
-
-    with col_year:
-        year = st.number_input(
-            "Year",
-            min_value=1900,
-            max_value=2100,
-            value=1900,
-            key="tech_availability_year",
-        )
-    with col_chassis:
-        chassis_skill = st.number_input(
-            "Chassis skill",
-            min_value=0.0,
-            max_value=100.0,
-            value=0.0,
-            step=1.0,
-            key="tech_availability_chassis_skill",
-        )
-    with col_engine:
-        engine_skill = st.number_input(
-            "Engine skill",
-            min_value=0.0,
-            max_value=100.0,
-            value=0.0,
-            step=1.0,
-            key="tech_availability_engine_skill",
-        )
-    with col_gearbox:
-        gearbox_skill = st.number_input(
-            "Gearbox skill",
-            min_value=0.0,
-            max_value=100.0,
-            value=0.0,
-            step=1.0,
-            key="tech_availability_gearbox_skill",
-        )
-    with col_vehicle:
-        vehicle_skill = st.number_input(
-            "Vehicle / Coachwork skill",
-            min_value=0.0,
-            max_value=100.0,
-            value=0.0,
-            step=1.0,
-            key="tech_availability_vehicle_skill",
-        )
-    with col_category:
-        category_filter = st.selectbox(
-            "Category filter",
-            options=["all", "chassis", "engine", "gearbox", "vehicle", "unknown"],
-            key="tech_availability_category_filter",
-        )
-
-    name_search = st.text_input(
-        "Search by component name",
-        value="",
-        key="tech_availability_name_search",
-    )
-
-    skill_levels = {
-        "chassis": float(chassis_skill),
-        "engine": float(engine_skill),
-        "gearbox": float(gearbox_skill),
-        "vehicle": float(vehicle_skill),
-    }
-    category = None if category_filter == "all" else category_filter
-
-    available_rows, locked_rows = classify_components(
-        catalog,
-        int(year),
-        skill_levels,
-        category_filter=category,
-        name_search=name_search,
-    )
-
-    st.markdown(f"### Available components ({len(available_rows)})")
-    if available_rows:
-        st.dataframe(
-            [_row_dict(row) for row in available_rows],
-            use_container_width=True,
-            hide_index=True,
-        )
-    else:
-        st.write("No available components match the current filters.")
-
-    st.markdown(f"### Locked / unavailable components ({len(locked_rows)})")
-    if locked_rows:
-        st.dataframe(
-            [_row_dict(row) for row in locked_rows],
-            use_container_width=True,
-            hide_index=True,
-        )
-    else:
-        st.write("No locked components for the current filters.")
-
-    if vehicle_type is not None and vehicle_type_name:
-        st.divider()
-        st.markdown("### Recommendation preview (experimental)")
-        cost_mode = st.selectbox(
-            "Cost mode",
-            options=["cheap", "balanced", "luxury"],
-            key="tech_availability_cost_mode",
-        )
-        rec_input = RecommendationInput(
-            vehicle_type_name=vehicle_type_name,
-            year=int(year),
-            cost_mode=cost_mode,
-            chassis_skill=float(chassis_skill),
-            engine_skill=float(engine_skill),
-            gearbox_skill=float(gearbox_skill),
-            vehicle_skill=float(vehicle_skill),
-        )
-        result = build_recommendation_result(
-            vehicle_type=vehicle_type,
-            inputs=rec_input,
-            catalog=catalog,
-        )
-        st.write(
-            f"Available tech entries: **{result.available_component_count}** | "
-            f"Locked/unavailable: **{result.unavailable_component_count}**"
-        )
-        for note in result.limitations:
-            st.caption(note)
-        for bullet in result.recommended_focus:
-            st.write(f"- {bullet}")
-
-    st.divider()
-    _render_import_panel(key_prefix="existing", expanded=False)
+    render_availability_tables(context)
 
 
 def _render_import_panel(*, key_prefix: str, expanded: bool) -> None:
@@ -235,8 +177,8 @@ def _render_import_panel(*, key_prefix: str, expanded: bool) -> None:
             key=f"{key_prefix}_components_upload_button",
         ):
             try:
-                result = validate_components_xml(uploaded.getvalue())
-                for warning in result.warnings:
+                validation = validate_components_xml(uploaded.getvalue())
+                for warning in validation.warnings:
                     st.warning(warning)
                 import_components_xml(
                     xml_content=uploaded.getvalue(),
