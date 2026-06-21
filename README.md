@@ -194,6 +194,21 @@ Markdown source:
 docs/component_naming_standard.md
 ```
 
+## Vehicle Type Groups
+
+The app can group vehicle types by similar design priorities. This is useful for
+planning shared platforms, component families, or design philosophies.
+
+CLI:
+
+```powershell
+gearcity-optimizer group-vehicle-types --groups 5
+gearcity-optimizer group-vehicle-types --show-similar-to Sedan
+```
+
+Streamlit:
+Use the **Vehicle Type Groups** tab.
+
 ## Main usage
 
 ```bash

@@ -29,6 +29,10 @@ from gearcity_optimizer.core.component_priorities import (
 from gearcity_optimizer.core.models import load_candidate_designs
 from gearcity_optimizer.core.optimizer import VALID_OBJECTIVES, rank_candidates
 from gearcity_optimizer.core.scoring import calculate_value_score
+from gearcity_optimizer.core.vehicle_type_groups import (
+    cluster_vehicle_types,
+    find_most_similar_vehicle_types,
+)
 from gearcity_optimizer.core.vehicle_types import load_vehicle_types
 from gearcity_optimizer.data_sources import (
     DEFAULT_CANDIDATES,
@@ -125,6 +129,7 @@ SUBCOMMANDS = {
     "list-maps",
     "danger-periods",
     "events-summary",
+    "group-vehicle-types",
 }
 
 UNKNOWN_SUBCOMMAND = "__unknown__"
@@ -970,6 +975,54 @@ def handle_events_summary(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_group_vehicle_types(args: argparse.Namespace) -> int:
+    """Cluster vehicle types by design-stat importance weights."""
+    vehicle_types_dict = load_vehicle_types(args.vehicle_types_file)
+    vehicle_types = list(vehicle_types_dict.values())
+
+    if args.show_similar_to:
+        try:
+            similar = find_most_similar_vehicle_types(
+                args.show_similar_to,
+                vehicle_types,
+                top_n=args.top,
+            )
+        except ValueError as exc:
+            raise SystemExit(f"Error: {exc}") from exc
+
+        print(f"\nMost similar to {args.show_similar_to}:\n")
+        if not similar:
+            print("No other vehicle types to compare.")
+            return 0
+
+        for index, (name, score) in enumerate(similar, start=1):
+            print(f"{index}. {name} - {score:.1f}")
+        print()
+        return 0
+
+    try:
+        groups = cluster_vehicle_types(vehicle_types, args.groups)
+    except ValueError as exc:
+        raise SystemExit(f"Error: {exc}") from exc
+
+    print(f"\nVehicle type groups, k={args.groups}\n")
+    for group in groups:
+        top_labels = ", ".join(stat for stat, _ in group.top_priorities)
+        print(f"Group {group.group_id}: {group.description}")
+        print(f"Top priorities: {top_labels}")
+        print("Vehicle types:")
+        for name in group.vehicle_types:
+            print(f"  - {name}")
+
+        if args.show_centroids:
+            print("Centroid:")
+            for stat in sorted(group.centroid.keys()):
+                print(f"  {stat}: {group.centroid[stat]:.3f}")
+        print()
+
+    return 0
+
+
 def handle_terminology_audit(args: argparse.Namespace) -> int:
     """Search or list evidence-backed terminology mappings."""
     if args.term:
@@ -1355,6 +1408,40 @@ def build_parser() -> argparse.ArgumentParser:
         help="Map id (required when multiple maps are imported)",
     )
 
+    group_vehicle_types_parser = subparsers.add_parser(
+        "group-vehicle-types",
+        help="Cluster vehicle types by similar design-stat priorities",
+    )
+    group_vehicle_types_parser.add_argument(
+        "--groups",
+        "-k",
+        type=int,
+        default=5,
+        help="Number of clusters (default: 5)",
+    )
+    group_vehicle_types_parser.add_argument(
+        "--vehicle-types-file",
+        default=_default_data_path(DEFAULT_VEHICLE_TYPES),
+        help="Path to vehicle types CSV",
+    )
+    group_vehicle_types_parser.add_argument(
+        "--show-centroids",
+        action="store_true",
+        help="Print centroid weights for each group",
+    )
+    group_vehicle_types_parser.add_argument(
+        "--show-similar-to",
+        default=None,
+        metavar="NAME",
+        help="Show vehicle types most similar to NAME instead of clustering",
+    )
+    group_vehicle_types_parser.add_argument(
+        "--top",
+        type=int,
+        default=5,
+        help="Number of similar vehicle types to show (default: 5)",
+    )
+
     parser._cli_parsers = {
         "run_app": run_app_parser,
         "rank": rank_parser,
@@ -1374,6 +1461,7 @@ def build_parser() -> argparse.ArgumentParser:
         "list_maps": list_maps_parser,
         "danger_periods": danger_periods_parser,
         "events_summary": events_summary_parser,
+        "group_vehicle_types": group_vehicle_types_parser,
     }
     return parser
 
@@ -1403,6 +1491,7 @@ def main(argv: list[str] | None = None) -> int:
     list_maps_parser = cli_parsers["list_maps"]
     danger_periods_parser = cli_parsers["danger_periods"]
     events_summary_parser = cli_parsers["events_summary"]
+    group_vehicle_types_parser = cli_parsers["group_vehicle_types"]
 
     if subcommand == UNKNOWN_SUBCOMMAND:
         print(f"Unknown command: {raw_argv[0]!r}")
@@ -1510,6 +1599,11 @@ def main(argv: list[str] | None = None) -> int:
         events_summary_parser.set_defaults(func=handle_events_summary)
         args = events_summary_parser.parse_args(remaining)
         return handle_events_summary(args)
+
+    if subcommand == "group-vehicle-types":
+        group_vehicle_types_parser.set_defaults(func=handle_group_vehicle_types)
+        args = group_vehicle_types_parser.parse_args(remaining)
+        return handle_group_vehicle_types(args)
 
     parser.print_help()
     return 1

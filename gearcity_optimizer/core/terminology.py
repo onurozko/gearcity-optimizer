@@ -472,6 +472,10 @@ def format_priority_label(
 
 
 FINAL_VEHICLE_RATING_SECTION_TITLE = "Final vehicle rating priorities"
+FINAL_VEHICLE_RATING_PRIORITY_CAPTION = (
+    "Vehicle-type importance weights from GearCity's data/wiki. "
+    "These show which final vehicle stats matter most for this vehicle type."
+)
 DESIGN_SLIDER_SECTION_TITLE = "Design sliders & testing focus"
 
 VEHICLE_TYPE_RATING_KEYS: tuple[str, ...] = (

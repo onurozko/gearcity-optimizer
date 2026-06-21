@@ -15,12 +15,18 @@ from gearcity_optimizer.core.terminology import (
     DESIGN_SLIDER_SECTION_TITLE,
     DRIVEABILITY_HANDLING_NOTE,
     ENGINE_POWER_NOTE,
+    FINAL_VEHICLE_RATING_PRIORITY_CAPTION,
     FINAL_VEHICLE_RATING_SECTION_TITLE,
     GEARBOX_COMFORT_NOTE,
     HOW_TO_READ_PRIORITIES_MARKDOWN,
     TERMINOLOGY_AUDIT_CLI_HINT,
+    format_final_vehicle_rating_label,
     list_terminology_audit_rows,
     list_terminology_layers,
+)
+from gearcity_optimizer.core.vehicle_type_groups import (
+    cluster_vehicle_types,
+    find_most_similar_vehicle_types,
 )
 from gearcity_optimizer.core.vehicle_types import load_vehicle_types
 from gearcity_optimizer.data_sources import project_root as repo_root
@@ -60,6 +66,13 @@ def list_vehicle_type_names(path: str) -> list[str]:
 def load_vehicle_type(path: str, name: str) -> VehicleType:
     """Load one vehicle type by name."""
     return load_vehicle_types(path)[name]
+
+
+def group_count_options(vehicle_type_count: int) -> list[int]:
+    """Return valid group counts for clustering (2 through vehicle type count)."""
+    if vehicle_type_count < 2:
+        return []
+    return list(range(2, vehicle_type_count + 1))
 
 
 def generate_checklist(
@@ -167,10 +180,11 @@ def render_app() -> None:
 
     st.markdown(f"### Selected vehicle type: **{vehicle_type_name}**")
 
-    tab_checklist, tab_priorities, tab_naming, tab_wiki, tab_packages, tab_events = st.tabs(
+    tab_checklist, tab_priorities, tab_groups, tab_naming, tab_wiki, tab_packages, tab_events = st.tabs(
         [
             "Design Checklist",
             "Component Priorities",
+            "Vehicle Type Groups",
             "Naming Guide",
             "Wiki / Formula Tools",
             "Package Optimizer",
@@ -210,10 +224,7 @@ def render_app() -> None:
         st.subheader("Priorities and terminology")
 
         st.markdown(f"## {FINAL_VEHICLE_RATING_SECTION_TITLE}")
-        st.caption(
-            "Formula-backed final vehicle stats for the selected vehicle type. "
-            "Matches the in-game New Car Design overview importance list."
-        )
+        st.caption(FINAL_VEHICLE_RATING_PRIORITY_CAPTION)
         for line in final_rating_lines:
             st.write(line)
 
@@ -306,6 +317,74 @@ def render_app() -> None:
                 st.markdown("**Driveability vs Handling**")
                 st.markdown(f"Status: `{drivability_entry['status']}`")
                 st.markdown(drivability_entry["explanation"])
+
+    with tab_groups:
+        st.subheader("Vehicle Type Groups")
+        st.markdown(
+            "Vehicle Type Groups cluster car types by their final rating importance "
+            "weights. This helps you see which vehicle types can share a design "
+            "philosophy or component family."
+        )
+        st.caption(
+            "This grouping only uses design-stat priorities: performance, "
+            "driveability, luxury, safety, fuel, power, cargo, and dependability. "
+            "It does not currently include wealth demo or fleet-contract flags."
+        )
+
+        all_vehicle_types = [load_vehicle_type(types_path, name) for name in vehicle_names]
+        group_options = group_count_options(len(vehicle_names))
+        default_groups = 5 if 5 in group_options else group_options[-1]
+
+        group_count = st.select_slider(
+            "Group count",
+            options=group_options,
+            value=default_groups,
+        )
+
+        similar_to = st.selectbox(
+            "Show vehicles similar to",
+            options=["(none)"] + vehicle_names,
+            index=vehicle_names.index(vehicle_type_name) + 1
+            if vehicle_type_name in vehicle_names
+            else 0,
+        )
+
+        if similar_to != "(none)":
+            st.markdown(f"### Most similar to **{similar_to}**")
+            similar_rows = find_most_similar_vehicle_types(
+                similar_to,
+                all_vehicle_types,
+                top_n=5,
+            )
+            for rank, (name, score) in enumerate(similar_rows, start=1):
+                st.write(f"{rank}. **{name}** - {score:.1f}")
+
+        st.divider()
+        st.markdown(f"### Groups (k={group_count})")
+
+        groups = cluster_vehicle_types(all_vehicle_types, group_count)
+        for group in groups:
+            top_labels = ", ".join(
+                format_final_vehicle_rating_label(stat)
+                for stat, _ in group.top_priorities
+            )
+            with st.expander(
+                f"Group {group.group_id}: {group.description}",
+                expanded=True,
+            ):
+                st.markdown(f"**Top priorities:** {top_labels}")
+                st.markdown("**Vehicle types:**")
+                for name in group.vehicle_types:
+                    st.write(f"- {name}")
+
+                centroid_rows = [
+                    {
+                        "Stat": format_final_vehicle_rating_label(stat),
+                        "Weight": round(group.centroid[stat], 3),
+                    }
+                    for stat in sorted(group.centroid.keys())
+                ]
+                st.dataframe(centroid_rows, use_container_width=True, hide_index=True)
 
     with tab_naming:
         st.subheader("GearCity Component Naming Standard")
