@@ -24,6 +24,8 @@ MISSING_CATALOG_WARNING = (
 class ComponentAvailabilityContext:
     """Filtered component availability for a year and skill setup."""
 
+    year: int
+    quarter: int
     catalog_loaded: bool
     source_path: Path | None
     available_components: list[ComponentTech]
@@ -57,6 +59,7 @@ def get_component_availability_context(
     gearbox_skill: float,
     vehicle_skill: float,
     *,
+    quarter: int = 4,
     category_filter: str | None = None,
     name_search: str | None = None,
     catalog: ComponentCatalog | None = None,
@@ -65,6 +68,8 @@ def get_component_availability_context(
     loaded_catalog = catalog if catalog is not None else load_imported_components_catalog()
     if loaded_catalog is None:
         return ComponentAvailabilityContext(
+            year=year,
+            quarter=quarter,
             catalog_loaded=False,
             source_path=None,
             available_components=[],
@@ -86,12 +91,15 @@ def get_component_availability_context(
         loaded_catalog,
         year,
         skill_levels,
+        quarter=quarter,
         category_filter=category_filter,
         name_search=name_search,
     )
     available_components = [row.component for row in available_rows]
     locked_components = [row.component for row in locked_rows]
     return ComponentAvailabilityContext(
+        year=year,
+        quarter=quarter,
         catalog_loaded=True,
         source_path=loaded_catalog.source_path,
         available_components=available_components,

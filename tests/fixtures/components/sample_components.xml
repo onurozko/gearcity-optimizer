@@ -18,11 +18,11 @@
 
     <EngineComponents>
 
-        <layout name="91001" type="layout" year="1898" death="5050" skill="10" picture="FlatLayout.dds" performance="35" reliability="50" smoothness="45"/>
+        <layout name="91001" type="layout" year="1893" death="5050" skill="0" picture="FlatLayout.dds" performance="35" reliability="50" smoothness="45"/>
 
-        <layout name="91004" type="layout" year="1890" death="5050" skill="5" picture="SingleLayout.dds" performance="15" reliability="40" smoothness="30"/>
+        <layout name="91004" type="layout" year="1890" death="5050" skill="0" picture="SingleLayout.dds" performance="15" reliability="40" smoothness="30"/>
 
-        <layout name="91005" type="layout" year="1910" death="5050" skill="15" picture="StraightLayout.dds" performance="45" reliability="55" smoothness="50"/>
+        <layout name="91005" type="layout" year="1891" death="5050" skill="10" picture="StraightLayout.dds" performance="45" reliability="55" smoothness="50"/>
 
         <layout name="91003" type="layout" year="1920" death="5050" skill="20" picture="VLayout.dds" performance="55" reliability="45"/>
 
@@ -33,6 +33,8 @@
         <fuel name="91102" type="fuel" year="1925" death="5050" skill="15" picture="Diesel.dds" fueleconomy="65" performance="30"/>
 
         <valve name="91201" type="valve" year="1900" death="5050" skill="0" picture="LHead.dds" reliability="60" performance="25"/>
+
+        <valve name="91203" type="valve" year="1890" death="5050" skill="0" picture="NoValve.dds" reliability="35" performance="10"/>
 
         <valve name="91202" type="valve" year="1915" death="5050" skill="20" picture="OHV.dds" performance="45" reliability="50"/>
 

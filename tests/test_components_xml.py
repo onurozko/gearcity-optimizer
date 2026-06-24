@@ -126,6 +126,16 @@ def test_availability_filter_respects_required_skill(fixture_xml_path: Path):
     assert is_component_available(frame_1910, 1910, high_skill)
 
 
+def test_straight_layout_available_at_1900_with_starting_skill(fixture_xml_path: Path):
+    """I/Straight layout unlocks in 1891 per wiki, so it is available at game start."""
+    catalog = parse_components_xml(fixture_xml_path)
+    starting_skill = {"chassis": 5.0, "engine": 5.0, "gearbox": 5.0, "vehicle": 5.0}
+    straight = next(c for c in catalog.components if c.id == "91005")
+
+    assert straight.start_year == 1891
+    assert is_component_available(straight, 1900, starting_skill)
+
+
 def test_unknown_fields_do_not_crash_parser(fixture_xml_path: Path):
     catalog = parse_components_xml(fixture_xml_path)
     unknown = next(component for component in catalog.components if component.id == "93001")
@@ -238,5 +248,5 @@ def test_cli_tech_availability_with_imported_catalog(
     )
     assert exit_code == 0
     output = capsys.readouterr().out
-    assert "Tech availability for year 1905" in output
+    assert "Tech availability for 1905 Q4" in output
     assert "Available" in output

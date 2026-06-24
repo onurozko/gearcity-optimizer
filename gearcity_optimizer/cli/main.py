@@ -1068,12 +1068,13 @@ def handle_tech_availability(args: argparse.Namespace) -> int:
         catalog,
         args.year,
         skill_levels,
+        quarter=args.quarter,
         category_filter=category,
         name_search=args.search,
     )
 
     summary = catalog_summary(catalog)
-    print(f"\nTech availability for year {args.year}\n")
+    print(f"\nTech availability for {args.year} Q{args.quarter}\n")
     print(f"Catalog entries: {len(catalog.components)}")
     if summary:
         print(
@@ -1838,6 +1839,13 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=1900,
         help="Game year (minimum 1900)",
+    )
+    tech_availability_parser.add_argument(
+        "--quarter",
+        type=int,
+        default=4,
+        choices=(1, 2, 3, 4),
+        help="Quarter within the year (1-4) for skill requirement decay",
     )
     tech_availability_parser.add_argument(
         "--chassis-skill",

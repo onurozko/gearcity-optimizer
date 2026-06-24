@@ -13,6 +13,7 @@ from gearcity_optimizer.core.component_vehicle_groups import (
     classify_vehicle_group,
     is_mainstream_layout,
     is_primitive_layout,
+    is_primitive_valvetrain,
     is_specialty_layout,
 )
 from gearcity_optimizer.core.cost_mode import CostMode, parse_cost_mode
@@ -20,6 +21,10 @@ from gearcity_optimizer.core.models import VehicleType
 from gearcity_optimizer.importers.component_choices import (
     ComponentChoice,
     choice_type_label,
+)
+from gearcity_optimizer.core.wiki_component_compatibility import (
+    is_valid_partial_choices,
+    validate_component_choices,
 )
 from gearcity_optimizer.reports.part_recommender import is_work_or_utility_focused
 
@@ -65,10 +70,39 @@ STAT_WEIGHTS: dict[str, tuple[str, float]] = {
 
 AUTO_PICK_MIN_SCORE = 58.0
 AUTO_PICK_MIN_GAP = 10.0
+AUTO_PICK_RECOMMENDED_MIN_SCORE = 70.0
+AUTO_PICK_USABLE_MIN_SCORE = 50.0
+AUTO_PICK_NOT_RECOMMENDED_MAX_SCORE = 35.0
+
+AutoPickStatus = Literal[
+    "recommended",
+    "usable_candidate",
+    "low_confidence_candidate",
+    "not_recommended",
+    "manual",
+    "none",
+]
+
 EXPERIMENTAL_DISCLAIMER = (
     "Experimental: automatic component choice scoring is still being validated. "
     "Review alternatives before copying the setup into GearCity."
 )
+NO_RELIABLE_AUTO_PICK_WARNING = (
+    "No reliable auto-pick found for this choice type. Select manually or inspect alternatives."
+)
+LOW_CONFIDENCE_PAGE_WARNING = (
+    "Some automatic component choices are low-confidence. Review alternatives or switch to "
+    "Manual component selection."
+)
+
+AUTO_PICK_STATUS_LABELS: dict[str, str] = {
+    "recommended": "Recommended",
+    "usable_candidate": "Usable candidate",
+    "low_confidence_candidate": "No reliable recommendation",
+    "not_recommended": "No reliable recommendation",
+    "manual": "Manual selection",
+    "none": "No candidate",
+}
 
 
 @dataclass(frozen=True)
@@ -102,6 +136,8 @@ class ChoiceRecommendation:
     reason: str
     confidence: str
     auto_pick_enabled: bool = False
+    auto_pick_status: AutoPickStatus = "none"
+    top_candidate: ComponentChoice | None = None
     warnings: list[str] = field(default_factory=list)
 
 
@@ -149,6 +185,9 @@ def _era_score(
     year: int,
     candidates: list[ComponentChoice],
 ) -> tuple[float, list[str], list[str]]:
+    if choice.choice_type in {"gear_count", "overdrive"}:
+        return 70.0, [], ["mechanical gearbox option; era fit de-emphasized"]
+
     reasons: list[str] = []
     penalties: list[str] = []
     start = choice.start_year or 1850
@@ -180,6 +219,8 @@ def _vehicle_fit_score(
     vehicle_type: VehicleType,
     vehicle_group: str,
     candidates: list[ComponentChoice],
+    cost_mode: CostMode,
+    year: int,
 ) -> tuple[float, list[str], list[str]]:
     penalties: list[str] = []
     reasons: list[str] = []
@@ -195,6 +236,13 @@ def _vehicle_fit_score(
             if any(is_mainstream_layout(item.display_name) for item in candidates if item.id != choice.id):
                 penalties.append("obsolete/poor sedan fit")
                 score -= 20.0
+            if (
+                vehicle_group in PASSENGER_GROUPS
+                and cost_mode in {CostMode.BALANCED, CostMode.LUXURY}
+                and any(is_mainstream_layout(item.display_name) for item in candidates if item.id != choice.id)
+            ):
+                score -= 25.0
+                penalties.append("primitive layout unsuitable for balanced/luxury passenger vehicle")
         elif is_mainstream_layout(name):
             score += 20.0
             reasons.append("mainstream balanced passenger layout")
@@ -211,6 +259,19 @@ def _vehicle_fit_score(
         if vehicle_group == "luxury_passenger" and any(token in name for token in LUXURY_LAYOUT_TOKENS):
             score += 10.0
             reasons.append("refinement-friendly layout")
+
+    if choice.choice_type == "valvetrain" and is_primitive_valvetrain(name):
+        score -= 30.0
+        penalties.append("primitive valvetrain")
+        if vehicle_group in PASSENGER_GROUPS:
+            penalties.append("poor passenger car valvetrain fit")
+        if any(
+            not is_primitive_valvetrain(item.display_name)
+            for item in candidates
+            if item.id != choice.id
+        ):
+            score -= 25.0
+            penalties.append("superseded by normal valvetrain options")
 
     if choice.choice_type == "forced_induction":
         weights = get_adjusted_vehicle_weights(vehicle_type)
@@ -235,6 +296,44 @@ def _vehicle_fit_score(
         if any(token in name for token in ("truck", "utility", "torque", "heavy", "manual", "diesel")):
             score += 10.0
             reasons.append("utility/work-oriented component")
+
+    if choice.choice_type == "gear_count":
+        from gearcity_optimizer.core.wiki_component_compatibility import parse_gear_count
+
+        gears = parse_gear_count(choice)
+        score = 48.0
+        if gears is not None:
+            score += min(gears, 8) * 7.0
+            reasons.append(
+                f"{gears}-speed adds ~{gears * 10} lb-ft base gearbox torque capacity"
+            )
+            weights = get_adjusted_vehicle_weights(vehicle_type)
+            if weights.get("performance", 0.0) >= 0.40:
+                score += min(gears, 6) * 2.0
+            if weights.get("fuel", 0.0) >= 0.50:
+                score += min(gears, 6) * 1.5
+                reasons.append("extra gears spread ratios for fuel economy")
+            if weights.get("dependability", 0.0) >= 0.45 and gears is not None and gears >= 4:
+                score += 4.0
+                reasons.append("moderate gearing suits dependability focus")
+        if cost_mode is CostMode.CHEAP:
+            if gears is not None and gears >= 5:
+                score -= 18.0
+                penalties.append("many gears raise cost/complexity in cheap mode")
+            elif gears is not None and gears >= 4:
+                score -= 6.0
+        elif cost_mode is CostMode.LUXURY and gears is not None and gears >= 4:
+            score += 8.0
+            reasons.append("refinement-friendly gearing")
+
+    if year >= 1920 and choice.start_year is not None and choice.start_year < year - 30:
+        if any(
+            (item.start_year or 0) >= year - 10
+            for item in candidates
+            if item.id != choice.id
+        ):
+            score -= 15.0
+            penalties.append("very early tech for selected year when newer options exist")
 
     return max(min(score, 100.0), 0.0), penalties, reasons
 
@@ -294,6 +393,8 @@ def score_component_suitability(
         vehicle_type=vehicle_type,
         vehicle_group=vehicle_group,
         candidates=candidates,
+        cost_mode=cost_mode,
+        year=year,
     )
     cost_score, cost_penalties, cost_reasons = _cost_mode_score(
         choice,
@@ -312,12 +413,27 @@ def score_component_suitability(
     if choice.choice_type == "unknown":
         penalties.append("uncertain choice type classification")
 
-    weights = {
-        "stat": 0.35 if has_stats else 0.15,
-        "fit": 0.30,
-        "era": 0.20,
-        "cost": 0.15,
-    }
+    if choice.choice_type in {"gear_count", "overdrive"}:
+        weights = {
+            "stat": 0.10 if has_stats else 0.05,
+            "fit": 0.55,
+            "era": 0.05,
+            "cost": 0.30,
+        }
+    elif choice.choice_type == "cylinder_count":
+        weights = {
+            "stat": 0.25 if has_stats else 0.15,
+            "fit": 0.40,
+            "era": 0.10,
+            "cost": 0.25,
+        }
+    else:
+        weights = {
+            "stat": 0.35 if has_stats else 0.15,
+            "fit": 0.30,
+            "era": 0.20,
+            "cost": 0.15,
+        }
     total = (
         stat_score * weights["stat"]
         + fit_score * weights["fit"]
@@ -328,7 +444,9 @@ def score_component_suitability(
     total -= len(penalties) * 4.0
     total = max(min(total, 100.0), 0.0)
 
-    if has_stats and total >= 70.0 and not penalties:
+    if has_stats and total >= 80.0 and not penalties:
+        confidence = "high"
+    elif has_stats and total >= 70.0 and not penalties:
         confidence = "medium"
     elif has_stats and total >= 55.0:
         confidence = "low"
@@ -352,12 +470,55 @@ def score_component_suitability(
     )
 
 
+def determine_auto_pick_status(suitability: float, confidence: str) -> AutoPickStatus:
+    """Map suitability and confidence to an auto-pick status."""
+    if suitability < AUTO_PICK_NOT_RECOMMENDED_MAX_SCORE:
+        return "not_recommended"
+    if suitability < AUTO_PICK_USABLE_MIN_SCORE or confidence == "low":
+        return "low_confidence_candidate"
+    if suitability < AUTO_PICK_RECOMMENDED_MIN_SCORE:
+        return "usable_candidate"
+    if confidence in {"medium", "high"}:
+        return "recommended"
+    return "low_confidence_candidate"
+
+
+def auto_pick_status_label(status: AutoPickStatus) -> str:
+    """Return a human-readable auto-pick status label."""
+    return AUTO_PICK_STATUS_LABELS.get(status, status.replace("_", " ").title())
+
+
+def suggested_choice_column_label(status: AutoPickStatus) -> str:
+    """Return the column label for the top-ranked component."""
+    if status == "recommended":
+        return "Suggested choice"
+    return "Top available candidate"
+
+
+def is_reliable_auto_pick_status(status: AutoPickStatus) -> bool:
+    """Return True when the auto-pick can be applied to slider optimization."""
+    return status in {"recommended", "usable_candidate"}
+
+
+def has_low_confidence_auto_picks(
+    result: ComponentChoiceRecommendationResult,
+) -> bool:
+    """Return True when any auto-pick choice is low-confidence or not recommended."""
+    return any(
+        item.auto_pick_status in {"low_confidence_candidate", "not_recommended"}
+        for item in result.choices
+        if item.top_candidate is not None
+    )
+
+
 def _confidence_from_scores(scores: list[ComponentSuitabilityScore]) -> str:
     if not scores:
         return "none"
     top = scores[0]
     if top.penalties:
         return "low"
+    if top.total_score >= 80.0:
+        return "high"
     if top.total_score >= AUTO_PICK_MIN_SCORE:
         if len(scores) >= 2 and top.total_score - scores[1].total_score < AUTO_PICK_MIN_GAP:
             return "low"
@@ -378,20 +539,37 @@ def _reason_for_candidates(
     *,
     auto_pick_enabled: bool,
     vehicle_type: VehicleType,
+    auto_pick_status: AutoPickStatus,
 ) -> str:
     if not scores:
         return "No available options for this choice type."
     top = scores[0]
-    if auto_pick_enabled:
-        penalty_text = f" Penalties: {'; '.join(top.penalties)}." if top.penalties else ""
+    if not auto_pick_enabled:
         return (
-            f"Experimental auto-pick: {top.component_name} scored {top.total_score:.0f}/100 "
-            f"for {vehicle_type.name}. {'; '.join(top.reasons[:2])}.{penalty_text}"
+            "Candidate rankings for manual inspection. "
+            + EXPERIMENTAL_DISCLAIMER
         )
-    return (
-        "Candidate rankings for manual inspection. "
-        + EXPERIMENTAL_DISCLAIMER
-    )
+
+    penalty_text = "; ".join(top.penalties)
+    if auto_pick_status == "recommended":
+        return (
+            f"Recommended auto-pick: {top.component_name} scored {top.total_score:.1f}/100 "
+            f"for {vehicle_type.name}. {'; '.join(top.reasons[:2])}."
+        )
+    if auto_pick_status == "usable_candidate":
+        return (
+            f"Usable candidate: {top.component_name} scored {top.total_score:.1f}/100 "
+            f"for {vehicle_type.name}. Review alternatives before copying into GearCity."
+        )
+
+    reason_parts = [
+        f"Top parsed candidate, but score is low ({top.total_score:.1f}/100).",
+    ]
+    if top.reasons:
+        reason_parts.append("; ".join(top.reasons[:2]))
+    if penalty_text:
+        reason_parts.append(penalty_text)
+    return " ".join(reason_parts)
 
 
 def _rank_candidates(
@@ -418,6 +596,38 @@ def _rank_candidates(
     )
 
 
+def _filter_wiki_compatible_ranked(
+    choice_type: str,
+    ranked: list[ComponentSuitabilityScore],
+    context_choices: dict[str, ComponentChoice],
+) -> tuple[list[ComponentSuitabilityScore], list[str]]:
+    """Drop ranked candidates that violate wiki rules given prior selections."""
+    compatible: list[ComponentSuitabilityScore] = []
+    for item in ranked:
+        trial = dict(context_choices)
+        trial[choice_type] = item.choice
+        if is_valid_partial_choices(trial):
+            compatible.append(item)
+
+    warnings: list[str] = []
+    if ranked and not compatible:
+        violations = validate_component_choices(
+            {**context_choices, choice_type: ranked[0].choice}
+        ).violations
+        if violations:
+            warnings.append(
+                f"No wiki-compatible {choice_type_label(choice_type).lower()} "
+                f"for current selections: {violations[0]}"
+            )
+    elif len(compatible) < len(ranked):
+        dropped = len(ranked) - len(compatible)
+        warnings.append(
+            f"Filtered {dropped} incompatible "
+            f"{choice_type_label(choice_type).lower()} option(s) using wiki rules."
+        )
+    return compatible or ranked, warnings
+
+
 def _recommend_for_type(
     choice_type: str,
     candidates: list[ComponentChoice],
@@ -426,7 +636,9 @@ def _recommend_for_type(
     cost_mode: CostMode,
     year: int,
     component_choice_mode: ComponentChoiceMode,
+    context_choices: dict[str, ComponentChoice] | None = None,
 ) -> ChoiceRecommendation:
+    context_choices = context_choices or {}
     if not candidates:
         return ChoiceRecommendation(
             section=_section_for_choice_type(choice_type),
@@ -445,7 +657,12 @@ def _recommend_for_type(
         cost_mode=cost_mode,
         year=year,
     )
-    warnings: list[str] = []
+    ranked, compat_warnings = _filter_wiki_compatible_ranked(
+        choice_type,
+        ranked,
+        context_choices,
+    )
+    warnings: list[str] = list(compat_warnings)
     if component_choice_mode == "manual":
         return ChoiceRecommendation(
             section=_section_for_choice_type(choice_type),
@@ -453,16 +670,27 @@ def _recommend_for_type(
             recommended_choice=None,
             alternatives=[item.choice for item in ranked[1:4]],
             candidates=ranked[:5],
-            reason=_reason_for_candidates(ranked, auto_pick_enabled=False, vehicle_type=vehicle_type),
+            reason=_reason_for_candidates(
+                ranked,
+                auto_pick_enabled=False,
+                vehicle_type=vehicle_type,
+                auto_pick_status="manual",
+            ),
             confidence="low",
             auto_pick_enabled=False,
+            auto_pick_status="manual",
+            top_candidate=ranked[0].choice if ranked else None,
             warnings=warnings,
         )
 
     top = ranked[0]
     confidence = _confidence_from_scores(ranked)
+    auto_pick_status = determine_auto_pick_status(top.total_score, confidence)
+    recommended_choice = top.choice if auto_pick_status == "recommended" else None
     warnings = [EXPERIMENTAL_DISCLAIMER]
-    if top.penalties:
+    if auto_pick_status in {"low_confidence_candidate", "not_recommended"}:
+        warnings.append(NO_RELIABLE_AUTO_PICK_WARNING)
+    elif top.penalties:
         warnings.append(
             f"Top-ranked {top.component_name} has suitability penalties: "
             + "; ".join(top.penalties)
@@ -474,16 +702,19 @@ def _recommend_for_type(
     return ChoiceRecommendation(
         section=_section_for_choice_type(choice_type),
         choice_type=choice_type,
-        recommended_choice=top.choice,
+        recommended_choice=recommended_choice,
         alternatives=[item.choice for item in ranked[1:4]],
         candidates=ranked[:5],
         reason=_reason_for_candidates(
             ranked,
             auto_pick_enabled=True,
             vehicle_type=vehicle_type,
+            auto_pick_status=auto_pick_status,
         ),
         confidence=confidence,
         auto_pick_enabled=True,
+        auto_pick_status=auto_pick_status,
+        top_candidate=top.choice,
         warnings=warnings,
     )
 
@@ -523,6 +754,7 @@ def recommend_component_choices(
     recommendations: list[ChoiceRecommendation] = []
     warnings: list[str] = []
     any_auto_pick = False
+    selected_context: dict[str, ComponentChoice] = dict(manual_selections)
 
     for choice_type in choice_types:
         candidates = grouped.get(choice_type, [])
@@ -548,6 +780,8 @@ def recommend_component_choices(
                     reason=f"Manual selection for {choice_type_label(choice_type).lower()}.",
                     confidence="medium",
                     auto_pick_enabled=False,
+                    auto_pick_status="manual",
+                    top_candidate=selected,
                 )
             )
             continue
@@ -559,10 +793,17 @@ def recommend_component_choices(
             cost_mode=parsed_cost_mode,
             year=year,
             component_choice_mode=component_choice_mode,
+            context_choices=selected_context,
         )
         recommendations.append(recommendation)
         warnings.extend(recommendation.warnings)
         any_auto_pick = any_auto_pick or recommendation.auto_pick_enabled
+        pick = recommendation.recommended_choice or recommendation.top_candidate
+        if pick is not None:
+            trial = dict(selected_context)
+            trial[choice_type] = pick
+            if is_valid_partial_choices(trial):
+                selected_context[choice_type] = pick
 
     present_types = {choice.choice_type for choice in available_choices if choice.choice_type != "unknown"}
     if not present_types:
@@ -571,6 +812,16 @@ def recommend_component_choices(
         )
     if component_choice_mode == "auto" and not any_auto_pick:
         warnings.append(EXPERIMENTAL_DISCLAIMER)
+
+    if component_choice_mode == "auto" and has_low_confidence_auto_picks(
+        ComponentChoiceRecommendationResult(
+            vehicle_type_name=vehicle_type.name,
+            year=year,
+            cost_mode=parsed_cost_mode.value,
+            choices=recommendations,
+        )
+    ):
+        warnings.append(LOW_CONFIDENCE_PAGE_WARNING)
 
     return ComponentChoiceRecommendationResult(
         vehicle_type_name=vehicle_type.name,

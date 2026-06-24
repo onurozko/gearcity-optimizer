@@ -11,6 +11,7 @@ from gearcity_optimizer.importers.component_sources import (
     COMPONENTS_FILENAME,
     discover_components_source,
 )
+from gearcity_optimizer.core.design_skill_decay import effective_required_skill
 
 MIN_AVAILABILITY_YEAR = 1900
 OPEN_ENDED_DEATH_YEARS = frozenset({5050, 9999, 30000})
@@ -329,6 +330,8 @@ def availability_reason(
     component: ComponentTech,
     year: int,
     skill_levels: dict[str, float],
+    *,
+    quarter: int = 4,
 ) -> tuple[str, str]:
     """Return availability status and human-readable reason."""
     if component.start_year is not None and year < component.start_year:
@@ -344,16 +347,29 @@ def availability_reason(
         )
 
     user_skill = _skill_for_component(component, skill_levels)
+    required = effective_required_skill(
+        component.required_skill,
+        component.start_year,
+        year,
+        quarter=quarter,
+    )
     if (
-        component.required_skill is not None
+        required is not None
         and user_skill is not None
-        and user_skill < component.required_skill
+        and user_skill < required
     ):
         skill_category = infer_skill_category(component)
+        base = component.required_skill
+        if base is not None and base != required:
+            requirement_text = (
+                f"{required:.2f} {skill_category} skill "
+                f"({base:g} base, adjusted for {year} Q{quarter})"
+            )
+        else:
+            requirement_text = f"{required:g} {skill_category} skill"
         return (
             "locked",
-            f"Requires {component.required_skill:g} {skill_category} skill "
-            f"(have {user_skill:g})",
+            f"Requires {requirement_text} (have {user_skill:g})",
         )
 
     if component.start_year is None and component.required_skill is None:
@@ -362,14 +378,31 @@ def availability_reason(
     return ("available", "Meets year and skill requirements")
 
 
+def adjusted_skill_requirement(
+    component: ComponentTech,
+    year: int,
+    *,
+    quarter: int = 4,
+) -> float | None:
+    """Expose decay-adjusted skill requirement for UI and tooling."""
+    return effective_required_skill(
+        component.required_skill,
+        component.start_year,
+        year,
+        quarter=quarter,
+    )
+
+
 def is_component_available(
     component: ComponentTech,
     year: int,
     skill_levels: dict[str, float],
+    *,
+    quarter: int = 4,
 ) -> bool:
     """Return True when a component meets year and skill requirements."""
     validate_year_input(year)
-    status, _ = availability_reason(component, year, skill_levels)
+    status, _ = availability_reason(component, year, skill_levels, quarter=quarter)
     return status == "available"
 
 
@@ -377,13 +410,15 @@ def filter_available_components(
     catalog: ComponentCatalog,
     year: int,
     skill_levels: dict[str, float],
+    *,
+    quarter: int = 4,
 ) -> list[ComponentTech]:
     """Return components available at the given year and skill levels."""
     validate_year_input(year)
     return [
         component
         for component in catalog.components
-        if is_component_available(component, year, skill_levels)
+        if is_component_available(component, year, skill_levels, quarter=quarter)
     ]
 
 
@@ -392,6 +427,7 @@ def classify_components(
     year: int,
     skill_levels: dict[str, float],
     *,
+    quarter: int = 4,
     category_filter: str | None = None,
     name_search: str | None = None,
 ) -> tuple[list[ComponentAvailabilityRow], list[ComponentAvailabilityRow]]:
@@ -411,7 +447,9 @@ def classify_components(
             if search not in (component.id or "").lower():
                 continue
 
-        status, reason = availability_reason(component, year, skill_levels)
+        status, reason = availability_reason(
+            component, year, skill_levels, quarter=quarter
+        )
         row = ComponentAvailabilityRow(
             component=component,
             status=status,

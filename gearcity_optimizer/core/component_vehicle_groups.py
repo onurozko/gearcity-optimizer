@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from gearcity_optimizer.core.component_priorities import get_adjusted_vehicle_weights
 from gearcity_optimizer.core.models import VehicleType
+from gearcity_optimizer.importers.component_choices import ComponentChoice
 from gearcity_optimizer.reports.part_recommender import is_work_or_utility_focused
 
 VehicleGroup = str
@@ -72,6 +73,8 @@ MAINSTREAM_LAYOUT_TOKENS = frozenset(
     {
         "straightlayout",
         "straight layout",
+        "ilayout",
+        "i layout",
         "inline",
         "flatlayout",
         "flat layout",
@@ -96,9 +99,38 @@ SPECIALTY_LAYOUT_TOKENS = frozenset(
 LUXURY_LAYOUT_TOKENS = frozenset({"vlayout", "v layout", "smooth", "refined"})
 PERFORMANCE_LAYOUT_TOKENS = frozenset({"vlayout", "v layout", "sport", "performance"})
 
+PRIMITIVE_VALVETRAIN_TOKENS = frozenset(
+    {
+        "novalve",
+        "no valve",
+        "no_valve",
+        "atmospheric",
+    }
+)
+
 
 def _name_tokens(name: str) -> str:
     return name.lower().replace("_", "").replace("-", "")
+
+
+def filter_engine_layout_candidates(
+    candidates: list[ComponentChoice],
+    *,
+    vehicle_type: VehicleType,
+) -> list[ComponentChoice]:
+    """Drop primitive single-cylinder layouts when mainstream layouts are available."""
+    group = classify_vehicle_group(vehicle_type)
+    if group not in PASSENGER_GROUPS:
+        return candidates
+    mainstream = [item for item in candidates if is_mainstream_layout(item.display_name)]
+    if not mainstream:
+        return candidates
+    filtered = [
+        item
+        for item in candidates
+        if not is_primitive_layout(item.display_name)
+    ]
+    return filtered or candidates
 
 
 def is_primitive_layout(name: str) -> bool:
@@ -114,3 +146,8 @@ def is_mainstream_layout(name: str) -> bool:
 def is_specialty_layout(name: str) -> bool:
     lowered = _name_tokens(name)
     return any(token.replace(" ", "") in lowered for token in SPECIALTY_LAYOUT_TOKENS)
+
+
+def is_primitive_valvetrain(name: str) -> bool:
+    lowered = _name_tokens(name)
+    return any(token.replace(" ", "") in lowered for token in PRIMITIVE_VALVETRAIN_TOKENS)

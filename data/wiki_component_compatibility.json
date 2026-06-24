@@ -1,0 +1,216 @@
+{
+  "source_pages": [
+    "https://wiki.gearcity.info/doku.php?id=gamemanual:references_enginesubcomponents",
+    "https://wiki.gearcity.info/doku.php?id=gamemanual:references_chassissubcomponents",
+    "https://wiki.gearcity.info/doku.php?id=gamemanual:references_gearboxsubcomponents"
+  ],
+  "engine_layouts": {
+    "Electric": {
+      "aliases": ["electric", "electriclayout"],
+      "unlock_year": 1892,
+      "cylinder_counts": [],
+      "special_cylinder_aliases": ["electric"],
+      "fuels": ["Electric I", "Electric II", "Electric III", "Electric IV", "Electric V"],
+      "inductions": ["No Induction"],
+      "valve_groups": [1],
+      "cylinder_arrangement": 0
+    },
+    "Flat": {
+      "aliases": ["flat", "flatlayout"],
+      "unlock_year": 1893,
+      "cylinder_counts": [2, 4, 6, 8, 10, 12],
+      "fuels": ["Two Stroke", "Gasoline", "Diesel", "Natural Gas", "Hybrid", "Hydrogen", "Autogas", "E85"],
+      "inductions": ["Naturally Aspirated", "Supercharger", "No Induction"],
+      "valve_groups": [2],
+      "cylinder_arrangement": 0
+    },
+    "H": {
+      "aliases": ["hlayout", "h layout"],
+      "unlock_year": 1895,
+      "cylinder_counts": [4, 8, 12, 16],
+      "fuels": ["Two Stroke", "Gasoline", "Diesel", "Natural Gas", "Hybrid", "Hydrogen", "Autogas", "E85"],
+      "inductions": ["Naturally Aspirated", "Supercharger", "No Induction"],
+      "valve_groups": [2],
+      "cylinder_arrangement": 4
+    },
+    "I": {
+      "aliases": ["i", "straight", "straightlayout", "ilayout", "inline"],
+      "unlock_year": 1891,
+      "cylinder_counts": [2, 3, 4, 5, 6, 8],
+      "fuels": ["Two Stroke", "Gasoline", "Diesel", "Natural Gas", "Hybrid", "Hydrogen", "Autogas", "E85"],
+      "inductions": ["Naturally Aspirated", "Supercharger", "No Induction"],
+      "valve_groups": [2],
+      "cylinder_arrangement": 1
+    },
+    "Radial": {
+      "aliases": ["radial", "radiallayout"],
+      "unlock_year": 1898,
+      "cylinder_counts": [3, 5, 7, 9, 15],
+      "fuels": ["Two Stroke", "Gasoline", "Diesel", "Natural Gas", "Hybrid", "Hydrogen", "Autogas", "E85"],
+      "inductions": ["Naturally Aspirated", "Supercharger", "No Induction"],
+      "valve_groups": [3],
+      "cylinder_arrangement": -1
+    },
+    "Rotary": {
+      "aliases": ["rotary", "rotarylayout"],
+      "unlock_year": 1895,
+      "cylinder_counts": [3, 5, 7, 9, 15],
+      "fuels": ["Two Stroke", "Gasoline", "Diesel", "Natural Gas", "Hybrid", "Hydrogen", "Autogas", "E85"],
+      "inductions": ["Naturally Aspirated", "Supercharger", "No Induction"],
+      "valve_groups": [3],
+      "cylinder_arrangement": -1
+    },
+    "Single": {
+      "aliases": ["single", "singlelayout", "single cylinder"],
+      "unlock_year": 1890,
+      "cylinder_counts": [1],
+      "special_cylinder_aliases": ["cylinder", "single"],
+      "fuels": ["Two Stroke", "Gasoline", "Diesel", "Natural Gas", "Hybrid", "Hydrogen", "Autogas", "E85"],
+      "inductions": ["Naturally Aspirated", "Supercharger", "No Induction"],
+      "valve_groups": [2],
+      "cylinder_arrangement": 0
+    },
+    "Steam": {
+      "aliases": ["steam", "steamlayout"],
+      "unlock_year": 1870,
+      "cylinder_counts": [],
+      "special_cylinder_aliases": ["steam"],
+      "fuels": ["Water"],
+      "inductions": ["Naturally Aspirated"],
+      "valve_groups": [1],
+      "cylinder_arrangement": 0
+    },
+    "U": {
+      "aliases": ["u", "ulayout"],
+      "unlock_year": 1894,
+      "cylinder_counts": [4, 6, 8, 10, 12],
+      "fuels": ["Two Stroke", "Gasoline", "Diesel", "Natural Gas", "Hybrid", "Hydrogen", "Autogas", "E85"],
+      "inductions": ["Naturally Aspirated", "Supercharger", "No Induction"],
+      "valve_groups": [2],
+      "cylinder_arrangement": 0
+    },
+    "V": {
+      "aliases": ["v", "vlayout"],
+      "unlock_year": 1892,
+      "cylinder_counts": [2, 4, 6, 8, 10, 12, 16],
+      "fuels": ["Two Stroke", "Gasoline", "Diesel", "Natural Gas", "Hybrid", "Hydrogen", "Autogas", "E85"],
+      "inductions": ["Naturally Aspirated", "Supercharger", "No Induction"],
+      "valve_groups": [2],
+      "cylinder_arrangement": 0
+    },
+    "VV": {
+      "aliases": ["vv", "vvlayout"],
+      "unlock_year": 1995,
+      "cylinder_counts": [8, 12, 16],
+      "fuels": ["Two Stroke", "Gasoline", "Diesel", "Natural Gas", "Hybrid", "Hydrogen", "Autogas", "E85"],
+      "inductions": ["Naturally Aspirated", "Supercharger", "No Induction"],
+      "valve_groups": [2],
+      "cylinder_arrangement": 4
+    },
+    "W": {
+      "aliases": ["w", "wlayout"],
+      "unlock_year": 1903,
+      "cylinder_counts": [3, 6, 9, 12, 18],
+      "fuels": ["Two Stroke", "Gasoline", "Diesel", "Natural Gas", "Hybrid", "Hydrogen", "Autogas", "E85"],
+      "inductions": ["Naturally Aspirated", "Supercharger", "No Induction"],
+      "valve_groups": [2],
+      "cylinder_arrangement": 3
+    },
+    "Wankel": {
+      "aliases": ["wankel", "wankle", "wanklelayout"],
+      "unlock_year": 1947,
+      "cylinder_counts": [],
+      "special_cylinder_aliases": ["wankle", "wankel"],
+      "fuels": ["Gasoline", "Diesel", "Natural Gas", "Hybrid", "Hydrogen", "Autogas"],
+      "inductions": ["Naturally Aspirated", "Supercharger", "No Induction"],
+      "valve_groups": [1],
+      "cylinder_arrangement": 0,
+      "turbine": true
+    },
+    "X": {
+      "aliases": ["x", "xlayout"],
+      "unlock_year": 1905,
+      "cylinder_counts": [4, 8, 12, 16],
+      "fuels": ["Two Stroke", "Gasoline", "Diesel", "Natural Gas", "Hybrid", "Hydrogen", "Autogas", "E85"],
+      "inductions": ["Naturally Aspirated", "Supercharger", "No Induction"],
+      "valve_groups": [2],
+      "cylinder_arrangement": 4
+    }
+  },
+  "valvetrains": {
+    "No Valve": {"aliases": ["novalve", "no valve"], "valve_group": 1},
+    "DOHC": {"aliases": ["dohc"], "valve_group": 2},
+    "F Head": {"aliases": ["fhead", "f head"], "valve_group": 2},
+    "L Head": {"aliases": ["lhead", "l head"], "valve_group": 2},
+    "OHV": {"aliases": ["ohv"], "valve_group": 2},
+    "Poppet Valve": {"aliases": ["poppetvalve", "poppet valve"], "valve_group": 3},
+    "SOHC": {"aliases": ["sohc"], "valve_group": 2},
+    "Sleeve Valve": {"aliases": ["sleevevalve", "sleeve valve"], "valve_group": 3},
+    "T Head": {"aliases": ["thead", "t head"], "valve_group": 2},
+    "Two Stroke": {"aliases": ["twostroke", "two stroke", "twostrokevalve"], "valve_group": 2}
+  },
+  "fuel_types": {
+    "Autogas": {"aliases": ["autogas"]},
+    "Diesel": {"aliases": ["diesel", "dieselfuel"]},
+    "E85": {"aliases": ["e85"]},
+    "Electric I": {"aliases": ["electric1", "electricifuel", "electric1fuel"]},
+    "Electric II": {"aliases": ["electric2", "electriciifuel"]},
+    "Electric III": {"aliases": ["electric3", "electriciiifuel"]},
+    "Electric IV": {"aliases": ["electric4", "electricivfuel"]},
+    "Electric V": {"aliases": ["electric5", "electricvfuel"]},
+    "Gasoline": {"aliases": ["gasoline", "4strokegas", "4strokegasfuel", "gasfuel", "gas"]},
+    "Hybrid": {"aliases": ["hybrid"]},
+    "Hydrogen": {"aliases": ["hydrogen"]},
+    "Natural Gas": {"aliases": ["naturalgas", "ng"]},
+    "Two Stroke": {"aliases": ["twostroke", "twostrokefuel"]},
+    "Water": {"aliases": ["water", "steamfuel"]}
+  },
+  "inductions": {
+    "Hybrid Turbocharger": {"aliases": ["hybridturbo", "hybridturbocharger"]},
+    "Naturally Aspirated": {"aliases": ["naturalyaspirated", "naturallyaspirated", "naturalyaspiratedinduction", "na"]},
+    "No Induction": {"aliases": ["noinduction", "no induction"]},
+    "Supercharger": {"aliases": ["supercharger", "supercharged"]},
+    "Twin-Turbocharger": {"aliases": ["twinturbo", "twin turbo"]},
+    "Twincharger": {"aliases": ["twincharger"]},
+    "Variable Geometry Turbocharger": {"aliases": ["vgt", "variablegeometry"]}
+  },
+  "gearbox_types": {
+    "Automatic": {
+      "aliases": ["automatic"],
+      "gear_counts": [2, 3, 4, 5, 6, 7, 8],
+      "addons": ["Transaxle", "Transversed", "Overdrive", "Limited Slip"]
+    },
+    "CVT": {
+      "aliases": ["cvt"],
+      "gear_counts": [2, 3, 4, 5, 6, 7, 8],
+      "addons": ["Transaxle", "Transversed", "Overdrive", "Limited Slip"]
+    },
+    "DCT": {
+      "aliases": ["dct"],
+      "gear_counts": [2, 3, 4, 5, 6, 7, 8],
+      "addons": ["Transaxle", "Transversed", "Overdrive", "Limited Slip"]
+    },
+    "Manual": {
+      "aliases": ["manual", "synchronisedmanual", "synchronizedmanual"],
+      "gear_counts": [1, 2, 3, 4, 5, 6, 7, 8],
+      "addons": ["Transaxle", "Transversed", "Overdrive", "Limited Slip"]
+    },
+    "Non-Synchronous": {
+      "aliases": ["nonsynchronous", "nonsynchronised", "nonsync", "nonsynchronisedmanual"],
+      "gear_counts": [1, 2, 3, 4, 5, 6, 7, 8],
+      "addons": ["Transaxle", "Transversed", "Overdrive", "Limited Slip"]
+    },
+    "Semi-Automatic": {
+      "aliases": ["semiautomatic", "semi automatic"],
+      "gear_counts": [2, 3, 4, 5, 6, 7, 8],
+      "addons": ["Transaxle", "Transversed", "Overdrive", "Limited Slip"]
+    }
+  },
+  "gearbox_addons": {
+    "Limited Slip": {"aliases": ["limitedslip", "limited slip"]},
+    "Overdrive": {"aliases": ["overdrive"]},
+    "Transaxle": {"aliases": ["transaxle"]},
+    "Transversed": {"aliases": ["transversed", "transverse"]}
+  },
+  "chassis_note": "Chassis frame, drivetrain, and suspension selections are independent per the wiki reference. Cross-component fit is enforced separately via engine size vs chassis limits."
+}

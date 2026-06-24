@@ -16,6 +16,11 @@ from gearcity_optimizer.importers.components_xml import (
 )
 from gearcity_optimizer.reports.component_choice_recommender import (
     EXPERIMENTAL_DISCLAIMER,
+    LOW_CONFIDENCE_PAGE_WARNING,
+    NO_RELIABLE_AUTO_PICK_WARNING,
+    auto_pick_status_label,
+    determine_auto_pick_status,
+    has_low_confidence_auto_picks,
     recommend_component_choices,
     score_component_suitability,
 )
@@ -267,10 +272,11 @@ def test_balanced_sedan_1920_does_not_auto_pick_single_layout(sedan_type, sample
         component_choice_mode="auto",
     )
     engine_layout = next(item for item in result.choices if item.choice_type == "engine_layout")
-    assert engine_layout.recommended_choice is not None
+    assert engine_layout.top_candidate is not None
     assert engine_layout.auto_pick_enabled
-    assert "SingleLayout" not in engine_layout.recommended_choice.display_name
-    assert engine_layout.confidence in {"medium", "low"}
+    assert "SingleLayout" not in engine_layout.top_candidate.display_name
+    assert engine_layout.auto_pick_status != "recommended" or engine_layout.candidates[0].total_score >= 70
+    assert engine_layout.recommended_choice is None or engine_layout.auto_pick_status == "recommended"
     single = next(
         item for item in engine_layout.candidates if "SingleLayout" in item.component_name
     )
@@ -279,7 +285,7 @@ def test_balanced_sedan_1920_does_not_auto_pick_single_layout(sedan_type, sample
 
 
 def test_auto_pick_mode_still_recommends_choices(sedan_type, sample_catalog):
-    """Auto-pick mode should return recommended choices for each available choice type."""
+    """Auto-pick mode should rank choices and expose top candidates for each choice type."""
     available = get_available_component_choices(
         1920,
         0.0,
@@ -296,11 +302,9 @@ def test_auto_pick_mode_still_recommends_choices(sedan_type, sample_catalog):
         available,
         component_choice_mode="auto",
     )
-    recommended = [
-        item for item in result.choices if item.recommended_choice is not None
-    ]
-    assert recommended
-    assert all(item.auto_pick_enabled for item in recommended)
+    ranked = [item for item in result.choices if item.top_candidate is not None]
+    assert ranked
+    assert all(item.auto_pick_enabled for item in ranked)
     assert any(
         EXPERIMENTAL_DISCLAIMER in warning for warning in result.warnings
     )
@@ -343,26 +347,24 @@ def test_auto_pick_is_deterministic(sedan_type, sample_catalog):
     first = recommend_component_choices(**kwargs)
     second = recommend_component_choices(**kwargs)
     first_picks = {
-        item.choice_type: item.recommended_choice.display_name
+        item.choice_type: item.top_candidate.display_name
         for item in first.choices
-        if item.recommended_choice is not None
+        if item.top_candidate is not None
     }
     second_picks = {
-        item.choice_type: item.recommended_choice.display_name
+        item.choice_type: item.top_candidate.display_name
         for item in second.choices
-        if item.recommended_choice is not None
+        if item.top_candidate is not None
     }
     assert first_picks == second_picks
 
 
 def test_optimizer_has_no_llm_dependency():
-    """Core optimizer modules should not depend on LLM/Ollama packages."""
+    """Core deterministic scorer modules should not depend on LLM/Ollama packages."""
     import gearcity_optimizer.reports.component_choice_recommender as recommender
-    import gearcity_optimizer.reports.design_optimizer as design_optimizer
     import gearcity_optimizer.reports.design_objective as design_objective
-    import gearcity_optimizer.reports.slider_optimizer as slider_optimizer
 
-    for module in (recommender, design_optimizer, design_objective, slider_optimizer):
+    for module in (recommender, design_objective):
         source = module.__file__
         assert source is not None
         text = Path(source).read_text(encoding="utf-8").lower()
@@ -427,6 +429,166 @@ def test_auto_pick_candidates_include_suitability_scores(sedan_type, sample_cata
     assert top.total_score >= 0.0
     assert isinstance(top.penalties, list)
     assert isinstance(top.reasons, list)
+
+
+def test_low_suitability_is_not_labeled_recommended():
+    """Scores below 50 should not receive recommended status."""
+    assert determine_auto_pick_status(49.0, "medium") == "low_confidence_candidate"
+    assert determine_auto_pick_status(21.8, "low") == "not_recommended"
+    assert auto_pick_status_label("low_confidence_candidate") == "No reliable recommendation"
+
+
+def test_csv_exports_auto_pick_status_not_clean_recommendation(
+    sedan_type, sample_catalog, monkeypatch, wiki_model_paths
+):
+    """CSV should include auto_pick_status instead of a bare recommended choice column."""
+    monkeypatch.setattr(
+        "gearcity_optimizer.reports.design_optimizer.get_available_component_choices",
+        lambda *args, **kwargs: get_available_component_choices(
+            1920, 0.0, 100.0, 100.0, 0.0, catalog=sample_catalog
+        ),
+    )
+    result = optimize_design(
+        DesignOptimizationInput(
+            vehicle_type=sedan_type,
+            year=1920,
+            cost_mode="balanced",
+            engine_skill=100.0,
+            gearbox_skill=100.0,
+            component_choice_mode="auto",
+        )
+    )
+    csv_text = design_result_to_csv(result)
+    assert "auto_pick_status" in csv_text
+    assert "suggested_choice_or_top_candidate" in csv_text
+    assert "Recommended choice" not in csv_text.splitlines()[0]
+
+
+def test_single_layout_below_50_shows_no_reliable_recommendation(sedan_type, sample_catalog):
+    """1920 Balanced Sedan should not treat SingleLayout as a reliable recommendation."""
+    available = get_available_component_choices(
+        1920,
+        0.0,
+        100.0,
+        100.0,
+        0.0,
+        catalog=sample_catalog,
+    )
+    layouts = [choice for choice in available if choice.choice_type == "engine_layout"]
+    single = next(choice for choice in layouts if "SingleLayout" in choice.display_name)
+    single_score = score_component_suitability(
+        single,
+        vehicle_type=sedan_type,
+        cost_mode=parse_cost_mode("balanced"),
+        year=1920,
+        candidates=layouts,
+    )
+    assert single_score.total_score < 50
+    status = determine_auto_pick_status(single_score.total_score, "low")
+    assert status in {"low_confidence_candidate", "not_recommended"}
+    assert auto_pick_status_label(status) == "No reliable recommendation"
+
+
+def test_page_warning_when_any_auto_pick_is_low_confidence(sedan_type, sample_catalog):
+    """Low-confidence auto-picks should trigger the page-level warning."""
+    available = get_available_component_choices(
+        1920,
+        0.0,
+        100.0,
+        100.0,
+        0.0,
+        catalog=sample_catalog,
+    )
+    result = recommend_component_choices(
+        sedan_type,
+        "balanced",
+        1920,
+        {"chassis": 0.0, "engine": 100.0, "gearbox": 100.0, "vehicle": 0.0},
+        available,
+        component_choice_mode="auto",
+    )
+    layouts = [choice for choice in available if choice.choice_type == "engine_layout"]
+    single = next(choice for choice in layouts if "SingleLayout" in choice.display_name)
+    single_only = recommend_component_choices(
+        sedan_type,
+        "balanced",
+        1920,
+        {"chassis": 0.0, "engine": 100.0, "gearbox": 100.0, "vehicle": 0.0},
+        [choice for choice in available if choice.choice_type != "engine_layout"] + [single],
+        component_choice_mode="auto",
+    )
+    assert has_low_confidence_auto_picks(single_only)
+    assert LOW_CONFIDENCE_PAGE_WARNING in single_only.warnings
+    assert any(
+        NO_RELIABLE_AUTO_PICK_WARNING in item.warnings
+        for item in single_only.choices
+        if item.choice_type == "engine_layout"
+    )
+    assert not has_low_confidence_auto_picks(result) or LOW_CONFIDENCE_PAGE_WARNING in result.warnings
+
+
+def test_novalve_penalized_for_mainstream_passenger(sedan_type, sample_catalog):
+    """NoValve should score poorly for mainstream passenger vehicles when alternatives exist."""
+    available = get_available_component_choices(
+        1920,
+        0.0,
+        100.0,
+        100.0,
+        0.0,
+        catalog=sample_catalog,
+    )
+    valvetrains = [choice for choice in available if choice.choice_type == "valvetrain"]
+    novalve = next(choice for choice in valvetrains if "NoValve" in choice.display_name)
+    score = score_component_suitability(
+        novalve,
+        vehicle_type=sedan_type,
+        cost_mode=parse_cost_mode("balanced"),
+        year=1920,
+        candidates=valvetrains,
+    )
+    assert "primitive valvetrain" in score.penalties
+    assert score.total_score < 50
+
+
+def test_higher_gear_count_scores_above_lower_for_passenger(sedan_type):
+    """Gear count should rank by torque capacity, not era fit alone."""
+    from gearcity_optimizer.importers.component_choices import ComponentChoice
+
+    def _gear(name: str, gears: int) -> ComponentChoice:
+        return ComponentChoice(
+            id=name,
+            name=name,
+            display_name=f"{gears} Gear",
+            section="gearbox",
+            choice_type="gear_count",
+            start_year=1890,
+            end_year=5050,
+            required_skill=0.0,
+            stats={"gears": float(gears)},
+            raw_attributes={"picture": f"{name}.dds"},
+            source_path="test",
+            confidence="high",
+        )
+
+    three = _gear("3Gear", 3)
+    six = _gear("6Gear", 6)
+    candidates = [three, six]
+    three_score = score_component_suitability(
+        three,
+        vehicle_type=sedan_type,
+        cost_mode=parse_cost_mode("balanced"),
+        year=1920,
+        candidates=candidates,
+    )
+    six_score = score_component_suitability(
+        six,
+        vehicle_type=sedan_type,
+        cost_mode=parse_cost_mode("balanced"),
+        year=1920,
+        candidates=candidates,
+    )
+    assert six_score.total_score > three_score.total_score
+    assert "torque capacity" in " ".join(six_score.reasons).lower()
 
 
 def test_auto_pick_mode_is_default():

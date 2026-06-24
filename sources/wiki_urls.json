@@ -28,5 +28,20 @@
     "name": "dynamic_reports",
     "url": "https://wiki.gearcity.info/doku.php?id=gamemanual:gui_dynamicreports",
     "purpose": "Buyer rating and dynamic report formulas"
+  },
+  {
+    "name": "engine_subcomponents",
+    "url": "https://wiki.gearcity.info/doku.php?id=gamemanual:references_enginesubcomponents",
+    "purpose": "Engine layout, fuel, valvetrain, and induction compatibility limits"
+  },
+  {
+    "name": "chassis_subcomponents",
+    "url": "https://wiki.gearcity.info/doku.php?id=gamemanual:references_chassissubcomponents",
+    "purpose": "Chassis frame, drivetrain, and suspension reference (independent selections)"
+  },
+  {
+    "name": "gearbox_subcomponents",
+    "url": "https://wiki.gearcity.info/doku.php?id=gamemanual:references_gearboxsubcomponents",
+    "purpose": "Gearbox type, gear count, and addon compatibility limits"
   }
 ]

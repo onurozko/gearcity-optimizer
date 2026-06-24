@@ -57,7 +57,8 @@ def test_design_optimizer_separates_controls_from_predicted_outputs():
     """Design Optimizer helpers should keep choices, controls, and predicted stats distinct."""
     source = Path(__file__).resolve().parents[1] / "gearcity_optimizer" / "ui" / "design_optimizer.py"
     text = source.read_text(encoding="utf-8")
-    assert "Recommended component choices" in text
+    assert "## Component choices" in text
+    assert "Validated component choices" in text
     assert "Recommended slider values" in text
     assert "Predicted output stats" in text
     assert "control_settings_for_section" in text
@@ -71,12 +72,18 @@ def test_shared_session_state_used_by_both_tabs():
     optimizer = (root / "design_optimizer.py").read_text(encoding="utf-8")
     tech = (root / "tech_availability.py").read_text(encoding="utf-8")
     helpers = (root / "streamlit_helpers.py").read_text(encoding="utf-8")
+    session = (root / "design_session.py").read_text(encoding="utf-8")
     assert "get_design_session_values" in optimizer
     assert "get_design_session_values" in tech
-    assert "render_shared_year_skill_inputs" in helpers
+    assert "render_shared_year_skill_panel" in optimizer
+    assert "render_shared_year_skill_panel" in tech
+    assert "render_checklist_controls" in helpers
+    assert "render_shared_year_skill_panel" in session
+    assert "reset_shared_year_skill_panel_render" in helpers
     assert "availability_context_from_session" in optimizer
     assert "availability_context_from_session" in tech
-    assert "selected_year" in (root / "design_session.py").read_text(encoding="utf-8")
+    assert "selected_year" in session
+    assert "checklist_year" in session
 
 
 def test_shared_session_defaults_map_consistently():
@@ -93,16 +100,19 @@ def test_shared_session_defaults_map_consistently():
         }
     )
     assert values.year == 1925
+    assert values.quarter == 4
     assert values.chassis_skill == 10.0
     assert values.cost_mode == "luxury"
     assert values.optimization_depth == "thorough"
     assert set(SESSION_DEFAULTS) >= {
         "selected_year",
+        "selected_quarter",
         "chassis_skill",
         "engine_skill",
         "gearbox_skill",
         "vehicle_skill",
         "cost_mode",
+        "checklist_year",
     }
 
 

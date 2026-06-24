@@ -51,7 +51,8 @@ from gearcity_optimizer.ui.design_optimizer import (
 )
 from gearcity_optimizer.ui.design_session import (
     init_design_session_state,
-    render_shared_year_skill_inputs,
+    render_checklist_controls,
+    reset_shared_year_skill_panel_render,
 )
 from gearcity_optimizer.ui.historical_events import render_historical_events_tab
 from gearcity_optimizer.ui.tech_availability import render_tech_availability_tab
@@ -144,6 +145,7 @@ def render_app() -> None:
 
     with st.sidebar:
         st.header("Settings")
+        st.caption("Vehicle type applies across tabs. Tab-specific controls live on each tab.")
         types_path = st.text_input(
             "Vehicle types file",
             value=default_vehicle_types_path(),
@@ -164,35 +166,19 @@ def render_app() -> None:
             else None
         )
 
-        year = st.number_input(
-            "Checklist year",
-            min_value=1899,
-            max_value=2100,
-            value=1901,
-            help="Used for the Design Checklist tab only. Design Optimizer and Tech "
-            "Availability share their own year via session state.",
-        )
-        generate = st.button("Generate Checklist", type="primary")
-
-        st.divider()
-        st.markdown("**Design Optimizer / Tech Availability**")
-        st.caption(
-            "Shared year and research skills. Changes here apply to both tabs."
-        )
-        render_shared_year_skill_inputs()
-
     if not vehicle_names or vehicle_type_name is None:
         st.warning("Load a valid vehicle types CSV to continue.")
         st.stop()
 
     vehicle_type = load_vehicle_type(types_path, vehicle_type_name)
     init_design_session_state()
+    reset_shared_year_skill_panel_render()
 
-    if "checklist_report" not in st.session_state:
-        st.session_state.checklist_report = generate_checklist(vehicle_type, int(year))
-
-    if generate:
-        st.session_state.checklist_report = generate_checklist(vehicle_type, int(year))
+    if st.session_state.checklist_report is None:
+        st.session_state.checklist_report = generate_checklist(
+            vehicle_type,
+            int(st.session_state.checklist_year),
+        )
 
     report = st.session_state.checklist_report
     priorities = component_priority_lines(vehicle_type)
@@ -217,6 +203,15 @@ def render_app() -> None:
     ) = st.tabs(streamlit_tab_names())
 
     with tab_checklist:
+        generate_checklist_clicked = render_checklist_controls()
+        if generate_checklist_clicked:
+            st.session_state.checklist_report = generate_checklist(
+                vehicle_type,
+                int(st.session_state.checklist_year),
+            )
+            report = st.session_state.checklist_report
+
+        st.divider()
         st.subheader(f"{report.vehicle_type} Design Checklist, {report.year}")
 
         st.markdown(f"## {FINAL_VEHICLE_RATING_SECTION_TITLE}")
@@ -456,11 +451,11 @@ def render_app() -> None:
         )
         st.code(
             "python -m gearcity_optimizer.cli design-checklist "
-            f"--vehicle-type {vehicle_type_name} --year {int(year)}"
+            f"--vehicle-type {vehicle_type_name} --year {int(st.session_state.checklist_year)}"
         )
         st.code(
             "python -m gearcity_optimizer.cli packages --vehicle-type "
-            f"{vehicle_type_name} --year {int(year)} --objective formula_fit"
+            f"{vehicle_type_name} --year {int(st.session_state.checklist_year)} --objective formula_fit"
         )
         st.caption("Placeholder tab for future simple package controls.")
 

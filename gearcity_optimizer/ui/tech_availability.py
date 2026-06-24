@@ -16,6 +16,7 @@ from gearcity_optimizer.importers.component_sources import (
 )
 from gearcity_optimizer.importers.components_xml import (
     ComponentsValidationError,
+    adjusted_skill_requirement,
     audit_components_schema,
     catalog_summary,
     choice_type_label,
@@ -28,6 +29,7 @@ from gearcity_optimizer.importers.components_xml import (
 from gearcity_optimizer.ui.design_session import (
     availability_context_from_session,
     get_design_session_values,
+    render_shared_year_skill_panel,
 )
 
 EMPTY_STATE_MESSAGE = MISSING_CATALOG_WARNING
@@ -48,7 +50,7 @@ def tech_availability_empty_state_message() -> str:
     return EMPTY_STATE_MESSAGE
 
 
-def _row_dict(row) -> dict[str, object]:
+def _row_dict(row, *, year: int, quarter: int) -> dict[str, object]:
     component = row.component
     choice = component_tech_to_choice(component)
     return {
@@ -59,6 +61,7 @@ def _row_dict(row) -> dict[str, object]:
         "start year": component.start_year,
         "end year": component.end_year,
         "required skill": component.required_skill,
+        "effective skill": adjusted_skill_requirement(component, year, quarter=quarter),
         "skill category": row.skill_category,
         "availability status": row.status,
         "reason": row.reason,
@@ -69,10 +72,16 @@ def _row_dict(row) -> dict[str, object]:
 def render_availability_tables(context: ComponentAvailabilityContext) -> None:
     """Render available and locked component tables from shared context."""
     st.markdown(f"### Available components ({context.available_count})")
-    st.caption("Sub-components unlocked for the selected year and design skills.")
+    st.caption(
+        f"Sub-components unlocked for {context.year} Q{context.quarter} "
+        "and the selected design skills."
+    )
     if context.available_rows:
         st.dataframe(
-            [_row_dict(row) for row in context.available_rows],
+            [
+                _row_dict(row, year=context.year, quarter=context.quarter)
+                for row in context.available_rows
+            ],
             use_container_width=True,
             hide_index=True,
         )
@@ -89,7 +98,10 @@ def render_availability_tables(context: ComponentAvailabilityContext) -> None:
         )
         if context.locked_rows:
             st.dataframe(
-                [_row_dict(row) for row in context.locked_rows],
+                [
+                    _row_dict(row, year=context.year, quarter=context.quarter)
+                    for row in context.locked_rows
+                ],
                 use_container_width=True,
                 hide_index=True,
             )
@@ -111,6 +123,8 @@ def render_tech_availability_tab(
         "research/design skill."
     )
     st.info(DESIGN_OPTIMIZER_NOTE)
+    render_shared_year_skill_panel()
+    st.divider()
 
     _render_import_panel(key_prefix="tech", expanded=False)
 
@@ -118,8 +132,8 @@ def render_tech_availability_tab(
     catalog = load_imported_components_catalog()
 
     st.caption(
-        "Year and research skills are set in the sidebar under "
-        "Design Optimizer / Tech Availability."
+        "Adjust year, quarter, and skills above to filter unlock status and effective "
+        "skill requirements."
     )
     session = get_design_session_values()
 

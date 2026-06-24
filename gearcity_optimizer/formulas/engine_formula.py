@@ -170,6 +170,11 @@ class EngineFormulaResult:
     design_requirements: float
     manufacturing_requirements: float
     warnings: list[str]
+    bore_mm: float = 0.0
+    stroke_mm: float = 0.0
+    displacement_cc: float = 0.0
+    cylinder_count: int = 0
+    cylinder_bank_arrangement: int = 1
 
 
 @dataclass
@@ -268,6 +273,8 @@ def _build_wiki_context(inputs: EngineFormulaInputs) -> _WikiContext:
     slider_layout_stroke = norm_stroke
     slider_layout_length = _clamp01(inputs.layout_length * 0.5 + layout_disp * 0.5)
     slider_layout_width = _clamp01(inputs.layout_width * 0.5 + layout_disp * 0.5)
+    layout_length_sub = slider_layout_length
+    layout_width_sub = slider_layout_width
     slider_layout_displacement = layout_disp
     slider_layout_weight = _clamp01(inputs.layout_weight)
 
@@ -307,8 +314,8 @@ def _build_wiki_context(inputs: EngineFormulaInputs) -> _WikiContext:
         layout_design=inputs.layout_design,
         layout_manu=inputs.layout_manufacturing,
         layout_weight_sub=inputs.layout_weight,
-        layout_width_sub=inputs.layout_width,
-        layout_length_sub=inputs.layout_length,
+        layout_width_sub=layout_width_sub,
+        layout_length_sub=layout_length_sub,
         cylinders_power=inputs.layout_performance,
         cylinders_fuel=inputs.fuel_system_fuel_economy * fuel_q,
         cylinders_rel=inputs.layout_reliability,
@@ -760,6 +767,11 @@ def calculate_engine(inputs: EngineFormulaInputs) -> EngineFormulaResult:
         length=length,
         design_requirements=design,
         manufacturing_requirements=manufacturing,
+        bore_mm=ctx.dims.bore_mm,
+        stroke_mm=ctx.dims.stroke_mm,
+        displacement_cc=ctx.dims.displacement_cc,
+        cylinder_count=inputs.cylinders,
+        cylinder_bank_arrangement=inputs.cylinder_bank_arrangement,
         warnings=[],
     )
     result.warnings = _collect_warnings(inputs, result)

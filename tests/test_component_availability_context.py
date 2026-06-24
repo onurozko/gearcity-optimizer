@@ -37,7 +37,9 @@ def test_both_ui_modules_use_shared_availability_context():
     assert "availability_context_from_session" in optimizer
     assert "availability_context_from_session" in tech
     assert "get_component_availability_context" in session
-    assert "render_shared_year_skill_inputs" in helpers
+    assert "render_shared_year_skill_panel" in optimizer
+    assert "render_shared_year_skill_panel" in tech
+    assert "render_checklist_controls" in helpers
     assert "classify_components" not in optimizer
     assert "classify_components" not in tech
 
@@ -156,6 +158,31 @@ def test_category_filter_applies_to_shared_context(sample_catalog):
         row.skill_category == "engine" or row.component.category.lower() == "engine"
         for row in engine_context.available_rows
     )
+
+
+def test_changing_quarter_changes_availability_context(sample_catalog):
+    """Different quarters in the same year can change unlock results."""
+    q1 = get_component_availability_context(
+        year=1901,
+        quarter=1,
+        chassis_skill=5.0,
+        engine_skill=9.5,
+        gearbox_skill=5.0,
+        vehicle_skill=5.0,
+        catalog=sample_catalog,
+    )
+    q4 = get_component_availability_context(
+        year=1901,
+        quarter=4,
+        chassis_skill=5.0,
+        engine_skill=9.5,
+        gearbox_skill=5.0,
+        vehicle_skill=5.0,
+        catalog=sample_catalog,
+    )
+    assert q1.quarter == 1
+    assert q4.quarter == 4
+    assert q4.available_count >= q1.available_count
 
 
 def test_render_entrypoints_importable():

@@ -291,6 +291,7 @@ def get_available_component_choices(
     gearbox_skill: float,
     vehicle_skill: float,
     *,
+    quarter: int = 4,
     catalog: ComponentCatalog | None = None,
 ) -> list[ComponentChoice]:
     """Return component choices available for the given year and skills."""
@@ -319,7 +320,7 @@ def get_available_component_choices(
             raw_attributes=choice.raw_attributes,
             source_path=choice.source_path,
         )
-        if is_component_available(tech, year, skill_levels):
+        if is_component_available(tech, year, skill_levels, quarter=quarter):
             available.append(choice)
     return available
 
