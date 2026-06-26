@@ -55,6 +55,7 @@ from gearcity_optimizer.ui.design_session import (
     reset_shared_year_skill_panel_render,
 )
 from gearcity_optimizer.ui.historical_events import render_historical_events_tab
+from gearcity_optimizer.ui.save_calibration import render_save_calibration_tab
 from gearcity_optimizer.ui.tech_availability import render_tech_availability_tab
 
 
@@ -200,6 +201,7 @@ def render_app() -> None:
         tab_events,
         tab_naming,
         tab_wiki,
+        tab_calibration,
     ) = st.tabs(streamlit_tab_names())
 
     with tab_checklist:
@@ -461,3 +463,6 @@ def render_app() -> None:
 
     with tab_events:
         render_historical_events_tab()
+
+    with tab_calibration:
+        render_save_calibration_tab()

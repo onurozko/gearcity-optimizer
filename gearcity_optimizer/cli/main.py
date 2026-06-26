@@ -171,6 +171,7 @@ SUBCOMMANDS = {
     "optimize-sliders",
     "components-schema-audit",
     "optimize-design",
+    "calibrate-save",
 }
 
 UNKNOWN_SUBCOMMAND = "__unknown__"
@@ -1043,6 +1044,68 @@ def handle_import_components(args: argparse.Namespace) -> int:
     )
     print(f"Imported Components catalog {source.name!r}")
     print(f"Saved Components.xml to {source.components_file}")
+    return 0
+
+
+def handle_calibrate_save(args: argparse.Namespace) -> int:
+    """Compare wiki formula outputs to designs stored in a GearCity save database."""
+    from gearcity_optimizer.reports.save_calibration import (
+        calibrate_save_game,
+        format_engine_calibration_lines,
+        format_gearbox_calibration_lines,
+        report_to_csv_rows,
+    )
+
+    company_id = args.company_id if args.company_id >= 0 else None
+    engine_ids = set(args.engine_id) if args.engine_id else None
+    gearbox_ids = set(args.gearbox_id) if args.gearbox_id else None
+    limit = None if args.all else args.limit
+
+    report = calibrate_save_game(
+        args.save,
+        company_id=company_id,
+        engine_limit=limit if args.kind in {"engine", "all"} else 0,
+        gearbox_limit=limit if args.kind in {"gearbox", "all"} else 0,
+        engine_ids=engine_ids,
+        gearbox_ids=gearbox_ids,
+    )
+
+    year = report.snapshot.current_year
+    print(f"\nSave calibration: {report.snapshot.path.name}")
+    if year is not None:
+        print(f"Current year in save: {year}")
+    print(f"Loaded {len(report.snapshot.engines)} engines, {len(report.snapshot.gearboxes)} gearboxes")
+    print(f"Compared {len(report.engines)} engines, {len(report.gearboxes)} gearboxes\n")
+
+    if report.engine_summary:
+        print("Engine mean absolute errors:")
+        for key, value in sorted(report.engine_summary.items()):
+            print(f"  {key}: {value:.2f}")
+        print()
+
+    if report.gearbox_summary:
+        print("Gearbox mean absolute errors:")
+        for key, value in sorted(report.gearbox_summary.items()):
+            print(f"  {key}: {value:.2f}")
+        print()
+
+    if args.kind in {"engine", "all"}:
+        for item in report.engines:
+            for line in format_engine_calibration_lines(item):
+                print(line)
+            print()
+
+    if args.kind in {"gearbox", "all"}:
+        for item in report.gearboxes:
+            for line in format_gearbox_calibration_lines(item):
+                print(line)
+            print()
+
+    if args.csv:
+        rows = report_to_csv_rows(report)
+        if rows:
+            pd.DataFrame(rows).to_csv(args.csv, index=False)
+            print(f"Wrote CSV: {args.csv}")
     return 0
 
 
@@ -2027,6 +2090,58 @@ def build_parser() -> argparse.ArgumentParser:
         default=_default_data_path(DEFAULT_VEHICLE_TYPES),
     )
 
+    calibrate_save_parser = subparsers.add_parser(
+        "calibrate-save",
+        help="Compare wiki formula outputs to engines/gearboxes in a GearCity .db save",
+    )
+    calibrate_save_parser.add_argument(
+        "--save",
+        required=True,
+        help="Path to a GearCity save game .db file",
+    )
+    calibrate_save_parser.add_argument(
+        "--company-id",
+        type=int,
+        default=0,
+        help="Company_ID to filter (default: 0 player). Use -1 for all companies.",
+    )
+    calibrate_save_parser.add_argument(
+        "--limit",
+        type=int,
+        default=10,
+        help="Max engines/gearboxes to compare per kind (default: 10)",
+    )
+    calibrate_save_parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Compare all matching rows (can be slow on large saves)",
+    )
+    calibrate_save_parser.add_argument(
+        "--kind",
+        default="all",
+        choices=["engine", "gearbox", "all"],
+        help="Which designs to compare",
+    )
+    calibrate_save_parser.add_argument(
+        "--engine-id",
+        type=int,
+        action="append",
+        default=None,
+        help="Compare one Engine_ID (repeatable)",
+    )
+    calibrate_save_parser.add_argument(
+        "--gearbox-id",
+        type=int,
+        action="append",
+        default=None,
+        help="Compare one Gearbox_ID (repeatable)",
+    )
+    calibrate_save_parser.add_argument(
+        "--csv",
+        default=None,
+        help="Optional CSV export path for metric deltas",
+    )
+
     group_vehicle_types_parser = subparsers.add_parser(
         "group-vehicle-types",
         help="Cluster vehicle types by similar design-stat priorities",
@@ -2087,6 +2202,9 @@ def build_parser() -> argparse.ArgumentParser:
         "build_formula_effects": build_formula_effects_parser,
         "formula_effects_audit": formula_effects_audit_parser,
         "optimize_sliders": optimize_sliders_parser,
+        "components_schema_audit": components_schema_audit_parser,
+        "optimize_design": optimize_design_parser,
+        "calibrate_save": calibrate_save_parser,
         "group_vehicle_types": group_vehicle_types_parser,
     }
     return parser
@@ -2124,6 +2242,9 @@ def main(argv: list[str] | None = None) -> int:
     build_formula_effects_parser = cli_parsers["build_formula_effects"]
     formula_effects_audit_parser = cli_parsers["formula_effects_audit"]
     optimize_sliders_parser = cli_parsers["optimize_sliders"]
+    components_schema_audit_parser = cli_parsers["components_schema_audit"]
+    optimize_design_parser = cli_parsers["optimize_design"]
+    calibrate_save_parser = cli_parsers["calibrate_save"]
     group_vehicle_types_parser = cli_parsers["group_vehicle_types"]
 
     if subcommand == UNKNOWN_SUBCOMMAND:
@@ -2282,6 +2403,11 @@ def main(argv: list[str] | None = None) -> int:
         optimize_design_parser.set_defaults(func=handle_optimize_design)
         args = optimize_design_parser.parse_args(remaining)
         return handle_optimize_design(args)
+
+    if subcommand == "calibrate-save":
+        calibrate_save_parser.set_defaults(func=handle_calibrate_save)
+        args = calibrate_save_parser.parse_args(remaining)
+        return handle_calibrate_save(args)
 
     parser.print_help()
     return 1

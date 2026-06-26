@@ -28,6 +28,11 @@ Thumbs.db
 # Logs
 *.log
 
+# GearCity save games (local only; do not commit)
+*.db
+!tests/fixtures/saves/
+!tests/fixtures/saves/**
+
 # Generated project outputs
 generated/
 

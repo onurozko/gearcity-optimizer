@@ -1,0 +1,114 @@
+{
+  "Electric": {
+    "engine_length": 1.05,
+    "engine_width": 0.85,
+    "layout_power": 0.4,
+    "layout_fuel": 0.5,
+    "layout_smooth": 0.5,
+    "cylinder_length_arrangement": 0
+  },
+  "Flat": {
+    "engine_length": 1.0,
+    "engine_width": 1.25,
+    "layout_power": 0.7,
+    "layout_fuel": 0.5,
+    "layout_smooth": 0.5,
+    "cylinder_length_arrangement": 0
+  },
+  "H": {
+    "engine_length": 1.1,
+    "engine_width": 1.5,
+    "layout_power": 0.15,
+    "layout_fuel": 0.5,
+    "layout_smooth": 0.5,
+    "cylinder_length_arrangement": 4
+  },
+  "I": {
+    "engine_length": 1.2,
+    "engine_width": 0.85,
+    "layout_power": 0.65,
+    "layout_fuel": 0.5,
+    "layout_smooth": 0.5,
+    "cylinder_length_arrangement": 1
+  },
+  "Radial": {
+    "engine_length": 0.3,
+    "engine_width": 1.2,
+    "layout_power": 0.8,
+    "layout_fuel": 0.5,
+    "layout_smooth": 0.5,
+    "cylinder_length_arrangement": -1
+  },
+  "Rotary": {
+    "engine_length": 0.3,
+    "engine_width": 1.2,
+    "layout_power": 0.8,
+    "layout_fuel": 0.5,
+    "layout_smooth": 0.5,
+    "cylinder_length_arrangement": -1
+  },
+  "Single": {
+    "engine_length": 0.65,
+    "engine_width": 0.65,
+    "layout_power": 0.25,
+    "layout_fuel": 0.5,
+    "layout_smooth": 0.5,
+    "cylinder_length_arrangement": 0
+  },
+  "Steam": {
+    "engine_length": 1.5,
+    "engine_width": 1.5,
+    "layout_power": 0.8,
+    "layout_fuel": 0.5,
+    "layout_smooth": 0.5,
+    "cylinder_length_arrangement": 0
+  },
+  "U": {
+    "engine_length": 1.2,
+    "engine_width": 1.8,
+    "layout_power": 0.6,
+    "layout_fuel": 0.5,
+    "layout_smooth": 0.5,
+    "cylinder_length_arrangement": 0
+  },
+  "V": {
+    "engine_length": 0.85,
+    "engine_width": 0.9,
+    "layout_power": 0.75,
+    "layout_fuel": 0.5,
+    "layout_smooth": 0.5,
+    "cylinder_length_arrangement": 0
+  },
+  "VV": {
+    "engine_length": 0.85,
+    "engine_width": 1.85,
+    "layout_power": 1.0,
+    "layout_fuel": 0.5,
+    "layout_smooth": 0.5,
+    "cylinder_length_arrangement": 4
+  },
+  "W": {
+    "engine_length": 0.85,
+    "engine_width": 1.3,
+    "layout_power": 1.0,
+    "layout_fuel": 0.5,
+    "layout_smooth": 0.5,
+    "cylinder_length_arrangement": 3
+  },
+  "Wankel": {
+    "engine_length": 0.6,
+    "engine_width": 0.7,
+    "layout_power": 0.35,
+    "layout_fuel": 0.5,
+    "layout_smooth": 0.5,
+    "cylinder_length_arrangement": 0
+  },
+  "X": {
+    "engine_length": 0.95,
+    "engine_width": 1.2,
+    "layout_power": 0.8,
+    "layout_fuel": 0.5,
+    "layout_smooth": 0.5,
+    "cylinder_length_arrangement": 4
+  }
+}

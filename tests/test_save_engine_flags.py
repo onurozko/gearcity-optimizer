@@ -1,0 +1,16 @@
+"""Tests for save engine flag mapping."""
+
+from __future__ import annotations
+
+from gearcity_optimizer.importers.save_engine_flags import engine_formula_flags_from_save
+
+
+def test_dohc_sets_overhead_cam():
+    flags = engine_formula_flags_from_save(valve="DOHC")
+    assert flags["has_overhead_cam"] is True
+
+
+def test_turbo_and_supercharger_flags():
+    assert engine_formula_flags_from_save(induction="Supercharger")["is_supercharged"] is True
+    assert engine_formula_flags_from_save(induction="Turbocharger")["is_turbocharged"] is True
+    assert engine_formula_flags_from_save(induction="Twincharger")["is_turbocharged"] is False

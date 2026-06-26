@@ -53,6 +53,18 @@ def test_subcomponent_mapping_uses_formula_scale_without_xml_stats():
     assert engine["layout_reliability"] == FORMULA_SUBCOMPONENT_DEFAULT
     assert engine["fuel_system_fuel_economy"] == FORMULA_SUBCOMPONENT_DEFAULT
     assert engine["cylinders"] == 4
+    assert engine["layout_length"] == 1.2
+    assert engine["layout_width"] == 0.85
+    assert engine["wiki_subcomponent_layout_length"] == 1.2
+
+
+def test_w_layout_uses_reference_dimensions_above_one():
+    layout = _choice("WLayout", "engine_layout")
+    mapped = subcomponent_values_from_choices({"engine_layout": layout})
+    engine = mapped["engine"]
+    assert engine["layout_width"] == 1.3
+    assert engine["layout_performance"] == 1.0
+    assert engine["cylinder_bank_arrangement"] == 3
 
 
 

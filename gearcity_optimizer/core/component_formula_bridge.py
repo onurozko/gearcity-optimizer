@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+from gearcity_optimizer.core.layout_reference import layout_reference_for_choice
 from gearcity_optimizer.core.wiki_component_compatibility import (
     layout_cylinder_bank_arrangement,
     parse_cylinder_count,
@@ -25,6 +26,8 @@ STAT_ALIASES: dict[str, tuple[str, ...]] = {
     "design": ("design", "designcost", "designrequirements"),
     "manufacturing": ("manufacturing", "manu", "manufacturingrequirements"),
     "complexity": ("complexity", "complex"),
+    "length": ("length", "enginelength", "engine_length"),
+    "width": ("width", "enginewidth", "engine_width"),
 }
 
 
@@ -70,6 +73,24 @@ def formula_subcomponent_value(
     return max(0.0, min(1.0, rating))
 
 
+def layout_dimension_subcomponent_value(
+    stats: dict[str, float],
+    *aliases: str,
+    default: float = DEFAULT_COMPONENT_RATING,
+) -> float:
+    """Layout length/width subcomponents may exceed 1.0 in game data (e.g. 1.3 for W layout)."""
+    value = _lookup_stat(stats, *aliases)
+    if value is None:
+        rating = default
+    elif value <= 1.0:
+        rating = value
+    elif value <= 100.0:
+        rating = value / 100.0
+    else:
+        rating = value
+    return max(0.0, rating)
+
+
 def _valvetrain_flags(choice: ComponentChoice) -> dict[str, bool]:
     text = " ".join(
         [
@@ -101,20 +122,47 @@ def subcomponent_values_from_choices(
     layout = selected_choices.get("engine_layout")
     if layout is not None:
         stats = layout.stats
+        layout_ref = layout_reference_for_choice(layout)
         engine["layout_weight"] = formula_subcomponent_value(stats, "weight")
-        length_stat = _lookup_stat(stats, "length")
-        width_stat = _lookup_stat(stats, "width")
+
+        length_stat = _lookup_stat(stats, "length", "engine_length")
         if length_stat is not None:
-            engine["layout_length"] = formula_subcomponent_value(stats, "length")
+            layout_length = layout_dimension_subcomponent_value(stats, "length", "engine_length")
+        elif layout_ref is not None:
+            layout_length = layout_ref.engine_length
         else:
-            engine["layout_length"] = FORMULA_SUBCOMPONENT_DEFAULT
+            layout_length = FORMULA_SUBCOMPONENT_DEFAULT
+        engine["layout_length"] = layout_length
+
+        width_stat = _lookup_stat(stats, "width", "engine_width")
         if width_stat is not None:
-            engine["layout_width"] = formula_subcomponent_value(stats, "width")
+            layout_width = layout_dimension_subcomponent_value(stats, "width", "engine_width")
+        elif layout_ref is not None:
+            layout_width = layout_ref.engine_width
         else:
-            engine["layout_width"] = FORMULA_SUBCOMPONENT_DEFAULT
-        engine["layout_smoothness"] = formula_subcomponent_value(stats, "smoothness")
+            layout_width = FORMULA_SUBCOMPONENT_DEFAULT
+        engine["layout_width"] = layout_width
+
+        engine["wiki_subcomponent_layout_length"] = layout_length
+        engine["wiki_subcomponent_layout_width"] = layout_width
+
+        perf_stat = _lookup_stat(stats, "performance", "power", "powerratings")
+        if perf_stat is not None:
+            engine["layout_performance"] = formula_subcomponent_value(stats, "performance", "power")
+        elif layout_ref is not None:
+            engine["layout_performance"] = layout_ref.layout_power
+        else:
+            engine["layout_performance"] = FORMULA_SUBCOMPONENT_DEFAULT
+
+        smooth_stat = _lookup_stat(stats, "smoothness", "smooth")
+        if smooth_stat is not None:
+            engine["layout_smoothness"] = formula_subcomponent_value(stats, "smoothness")
+        elif layout_ref is not None:
+            engine["layout_smoothness"] = layout_ref.layout_smooth
+        else:
+            engine["layout_smoothness"] = FORMULA_SUBCOMPONENT_DEFAULT
+
         engine["layout_reliability"] = formula_subcomponent_value(stats, "reliability")
-        engine["layout_performance"] = formula_subcomponent_value(stats, "performance")
         engine["layout_manufacturing"] = formula_subcomponent_value(stats, "manufacturing")
         engine["layout_design"] = formula_subcomponent_value(stats, "design")
         engine["cylinder_bank_arrangement"] = layout_cylinder_bank_arrangement(layout)

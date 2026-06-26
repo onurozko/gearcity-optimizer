@@ -136,6 +136,13 @@ class EngineFormulaInputs:
     marque_design_engine_skill: float = 0.0
     pre_research_engine_amount_effect: float = 0.0
     cylinder_bank_arrangement: int = 1
+    wiki_subcomponent_layout_length: float | None = None
+    wiki_subcomponent_layout_width: float | None = None
+    wiki_slider_layout_length: float | None = None
+    wiki_slider_layout_width: float | None = None
+    wiki_slider_performance_torque: float | None = None
+    wiki_slider_performance_revolutions: float | None = None
+    wiki_slider_performance_fuel: float | None = None
 
     def __post_init__(self) -> None:
         if self.year < YEAR_BASE:
@@ -271,16 +278,44 @@ def _build_wiki_context(inputs: EngineFormulaInputs) -> _WikiContext:
 
     slider_layout_bore = norm_bore
     slider_layout_stroke = norm_stroke
-    slider_layout_length = _clamp01(inputs.layout_length * 0.5 + layout_disp * 0.5)
-    slider_layout_width = _clamp01(inputs.layout_width * 0.5 + layout_disp * 0.5)
-    layout_length_sub = slider_layout_length
-    layout_width_sub = slider_layout_width
+    layout_length_sub = (
+        inputs.wiki_subcomponent_layout_length
+        if inputs.wiki_subcomponent_layout_length is not None
+        else inputs.layout_length
+    )
+    layout_width_sub = (
+        inputs.wiki_subcomponent_layout_width
+        if inputs.wiki_subcomponent_layout_width is not None
+        else inputs.layout_width
+    )
+    slider_layout_length = (
+        inputs.wiki_slider_layout_length
+        if inputs.wiki_slider_layout_length is not None
+        else _clamp01(inputs.layout_length * 0.5 + layout_disp * 0.5)
+    )
+    slider_layout_width = (
+        inputs.wiki_slider_layout_width
+        if inputs.wiki_slider_layout_width is not None
+        else _clamp01(inputs.layout_width * 0.5 + layout_disp * 0.5)
+    )
     slider_layout_displacement = layout_disp
     slider_layout_weight = _clamp01(inputs.layout_weight)
 
-    perf_torque = _clamp01(inputs.design_performance + 0.15 * bool01(forced))
-    perf_rev = _clamp01(inputs.design_performance + 0.1 * bool01(forced))
-    perf_fuel = inputs.design_fuel_economy
+    perf_torque = (
+        inputs.wiki_slider_performance_torque
+        if inputs.wiki_slider_performance_torque is not None
+        else _clamp01(inputs.design_performance + 0.15 * bool01(forced))
+    )
+    perf_rev = (
+        inputs.wiki_slider_performance_revolutions
+        if inputs.wiki_slider_performance_revolutions is not None
+        else _clamp01(inputs.design_performance + 0.1 * bool01(forced))
+    )
+    perf_fuel = (
+        inputs.wiki_slider_performance_fuel
+        if inputs.wiki_slider_performance_fuel is not None
+        else inputs.design_fuel_economy
+    )
 
     fuel_q = inputs.fuel_system_quality
     asp_q = inputs.aspiration_quality
@@ -785,6 +820,10 @@ def _row_to_inputs(row: pd.Series) -> EngineFormulaInputs:
         if field.name == "name":
             continue
         raw = row.get(field.name)
+        if field.name.startswith("wiki_"):
+            continue
+        if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+            continue
         if field.type is bool or field.type == "bool":
             kwargs[field.name] = _parse_bool(raw)
         elif field.type is int:
