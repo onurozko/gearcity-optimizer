@@ -100,16 +100,16 @@ def assess_physical_fit(
                 f"predicted engine torque ({engine_torque:.0f} lb-ft)."
             )
             shortfall = 1.0 - torque_margin
-            penalty += 20.0 + shortfall * 35.0
+            penalty += 40.0 + shortfall * 60.0
             if torque_margin < 0.5:
-                penalty += 15.0
+                penalty += 25.0
             if torque_margin < 0.25:
-                penalty += 20.0
+                penalty += 35.0
         elif torque_margin < 1.1:
             warnings.append(
                 f"Gearbox torque margin is tight ({torque_margin:.0%} of engine torque)."
             )
-            penalty += 2.0
+            penalty += 5.0
 
     length_margin: float | None = None
     width_margin: float | None = None
@@ -124,13 +124,13 @@ def assess_physical_fit(
                 f"Engine length ({engine_length:.1f} in) exceeds chassis bay "
                 f"({max_length:.1f} in)."
             )
-            penalty += 25.0 + min(20.0, (engine_length / max_length - 1.0) * 40.0)
+            penalty += 50.0 + min(35.0, (engine_length / max_length - 1.0) * 70.0)
         elif length_margin < 1.05:
             warnings.append(
                 f"Engine length ({engine_length:.1f} in) is close to bay limit "
                 f"({max_length:.1f} in)."
             )
-            penalty += 3.0
+            penalty += 8.0
 
     if engine_width is not None and max_width is not None and max_width > 0:
         bay_known = True
@@ -140,13 +140,13 @@ def assess_physical_fit(
                 f"Engine width ({engine_width:.1f} in) exceeds chassis bay "
                 f"({max_width:.1f} in)."
             )
-            penalty += 25.0 + min(20.0, (engine_width / max_width - 1.0) * 40.0)
+            penalty += 50.0 + min(35.0, (engine_width / max_width - 1.0) * 70.0)
         elif width_margin < 1.05:
             warnings.append(
                 f"Engine width ({engine_width:.1f} in) is close to bay limit "
                 f"({max_width:.1f} in)."
             )
-            penalty += 3.0
+            penalty += 8.0
 
     if bay_known:
         bay_ok = not any(

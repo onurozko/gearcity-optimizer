@@ -299,3 +299,104 @@ def test_optimization_score_prefers_torque_fit_over_raw_stats():
         ),
     )
     assert design_score_for_optimization(better_margin) > design_score_for_optimization(bad)
+
+
+def test_feasible_design_beats_infeasible_high_stats():
+    """Physical fit should dominate hill-climb scoring over raw stat totals."""
+    objective = build_design_objective(_sedan(), "balanced")
+    good_stats = score_complete_design(
+        [
+            PredictedOutput("vehicle_overall", "Vehicle overall", 85.0, 0.4, "test", True),
+            PredictedOutput("overall", "Overall", 85.0, 0.4, "test", True),
+        ],
+        None,
+        None,
+        objective,
+        vehicle_type=_sedan(),
+        engine_result=EngineFormulaResult(
+            horsepower=80.0,
+            torque=180.0,
+            fuel_economy=60.0,
+            reliability_rating=60.0,
+            smoothness_rating=60.0,
+            performance_rating=60.0,
+            overall_rating=60.0,
+            weight=400.0,
+            width=20.0,
+            length=25.0,
+            design_requirements=50.0,
+            manufacturing_requirements=30.0,
+            warnings=[],
+        ),
+        gearbox_result=GearboxFormulaResult(
+            max_torque_support=220.0,
+            weight=100.0,
+            power_rating=50.0,
+            fuel_economy_rating=50.0,
+            performance_rating=50.0,
+            reliability_rating=50.0,
+            comfort_rating=50.0,
+            overall_rating=50.0,
+            manufacturing_requirements=30.0,
+            design_requirements=30.0,
+            warnings=[],
+        ),
+        chassis_result=ChassisFormulaResult(
+            comfort_rating=60.0,
+            performance_rating=60.0,
+            strength_rating=60.0,
+            durability_rating=60.0,
+            overall_rating=60.0,
+            chassis_weight=1000.0,
+            chassis_length=400.0,
+            chassis_width=180.0,
+            max_engine_length=40.0,
+            max_engine_width=30.0,
+            design_requirements=50.0,
+            manufacturing_requirements=30.0,
+            warnings=[],
+        ),
+    )
+    flashy_infeasible = score_complete_design(
+        [
+            PredictedOutput("vehicle_overall", "Vehicle overall", 95.0, 0.4, "test", True),
+            PredictedOutput("overall", "Overall", 95.0, 0.4, "test", True),
+        ],
+        None,
+        None,
+        objective,
+        vehicle_type=_sedan(),
+        engine_result=EngineFormulaResult(
+            horsepower=8000.0,
+            torque=22819.0,
+            fuel_economy=100.0,
+            reliability_rating=0.0,
+            smoothness_rating=100.0,
+            performance_rating=100.0,
+            overall_rating=95.0,
+            weight=500.0,
+            width=30.0,
+            length=40.0,
+            design_requirements=50.0,
+            manufacturing_requirements=30.0,
+            warnings=[],
+        ),
+        gearbox_result=GearboxFormulaResult(
+            max_torque_support=139.0,
+            weight=100.0,
+            power_rating=50.0,
+            fuel_economy_rating=50.0,
+            performance_rating=50.0,
+            reliability_rating=50.0,
+            comfort_rating=50.0,
+            overall_rating=50.0,
+            manufacturing_requirements=30.0,
+            design_requirements=30.0,
+            warnings=[],
+        ),
+    )
+    assert good_stats.physical_fit is not None
+    assert not good_stats.physical_fit.has_violations
+    assert flashy_infeasible.physical_fit is not None
+    assert flashy_infeasible.physical_fit.has_violations
+    assert design_score_for_optimization(good_stats) > design_score_for_optimization(flashy_infeasible)

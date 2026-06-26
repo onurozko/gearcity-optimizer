@@ -231,3 +231,30 @@ def test_clamp_helper():
     assert clamp(150) == 100
     assert clamp(-5) == 0
     assert clamp(42) == 42
+
+
+def test_w_layout_length_uses_floored_bank_factor():
+    """W-15 save calibration: length should be ~56 in, not ~41 in with 1/3 banks."""
+    inputs = EngineFormulaInputs(
+        name="W15",
+        year=1906,
+        cylinders=15,
+        bore=123.0,
+        stroke=56.65,
+        cylinder_bank_arrangement=3,
+        layout_length=0.85,
+        layout_width=1.3,
+        wiki_subcomponent_layout_length=0.85,
+        wiki_subcomponent_layout_width=1.3,
+        wiki_slider_layout_length=0.0,
+        wiki_slider_layout_width=0.0,
+        has_overhead_cam=True,
+        design_performance=1.0,
+        tech_materials=1.0,
+        tech_components=1.0,
+        tech_techniques=1.0,
+        tech_technology=1.0,
+    )
+    result = calculate_engine(inputs)
+    assert result.length == pytest.approx(56.0, abs=3.0)
+    assert result.width == pytest.approx(42.0, abs=3.0)

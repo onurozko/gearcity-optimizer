@@ -134,7 +134,9 @@ def build_design_objective(vehicle_type: VehicleType, cost_mode: str) -> DesignO
 
     notes = [
         f"{vehicle_type.name} design objective uses final vehicle priority weights.",
-        "The optimizer maximizes weighted predicted final outputs, not individual sliders.",
+        "Physical fit is the top priority: engine torque must stay within gearbox capacity, "
+        "and engine length/width must fit the chassis bay before stats are considered.",
+        "The optimizer maximizes weighted predicted final outputs only among physically feasible designs.",
         "Low-priority stats may be sacrificed when they conflict with high-priority goals or cost mode.",
     ]
     if parsed_cost is CostMode.CHEAP:
@@ -430,7 +432,7 @@ def score_complete_design(
     )
     total_score = max(0.0, weighted_stat_score - total_penalty)
     if physical_fit.has_violations:
-        total_score = min(total_score, 30.0)
+        total_score = min(total_score, 15.0)
 
     quality_status = _quality_status(
         total_score=total_score,
@@ -465,20 +467,31 @@ def score_complete_design(
 
 
 def design_score_for_optimization(score: DesignScore) -> float:
-    """Hill-climb score that prefers physically feasible designs over raw stat totals."""
+    """Hill-climb score where physical fit margins dominate and stats break ties."""
     physical_fit = score.physical_fit
-    if physical_fit is not None and physical_fit.has_violations:
-        margins: list[float] = []
-        if physical_fit.torque_ok is False and physical_fit.torque_margin_ratio is not None:
-            margins.append(physical_fit.torque_margin_ratio)
-        if physical_fit.length_margin_ratio is not None and physical_fit.length_margin_ratio < 1.0:
-            margins.append(physical_fit.length_margin_ratio)
-        if physical_fit.width_margin_ratio is not None and physical_fit.width_margin_ratio < 1.0:
-            margins.append(physical_fit.width_margin_ratio)
-        if margins:
-            return min(margins) * 40.0
-        return 0.0
-    return score.total_score
+    stat_component = score.total_score * 0.15
+
+    if physical_fit is None:
+        return stat_component
+
+    margins: list[float] = []
+    if physical_fit.torque_margin_ratio is not None:
+        margins.append(physical_fit.torque_margin_ratio)
+    if physical_fit.length_margin_ratio is not None:
+        margins.append(physical_fit.length_margin_ratio)
+    if physical_fit.width_margin_ratio is not None:
+        margins.append(physical_fit.width_margin_ratio)
+
+    if not margins:
+        return stat_component
+
+    fit_margin = min(margins)
+
+    if physical_fit.has_violations:
+        return fit_margin * 45.0
+
+    headroom_bonus = max(0.0, fit_margin - 1.0) * 15.0
+    return 70.0 + fit_margin * 20.0 + headroom_bonus + stat_component
 
 
 def _quality_status(

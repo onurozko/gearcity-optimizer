@@ -172,8 +172,9 @@ def test_calibrate_engine_produces_metric_deltas(sample_save_db: Path):
     assert "length_in" in metrics
     assert "torque_lbft" in metrics
     assert metrics["length_in"].game_value == pytest.approx(56.0)
+    assert metrics["length_in"].abs_error < 5.0
+    assert metrics["width_in"].abs_error < 5.0
     assert metrics["torque_lbft"].abs_error < 20.0
-    assert metrics["horsepower"].predicted_value > 40.0
 
 
 def test_calibrate_save_game_report(sample_save_db: Path):

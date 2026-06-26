@@ -12,6 +12,7 @@ Assumptions documented in code:
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, fields, replace
 from typing import Any
 
@@ -392,6 +393,25 @@ def calculate_displacement_cc(ctx: _WikiContext) -> float:
     return ctx.dims.displacement_cc
 
 
+def _length_banks_factor(arrangement: int) -> float:
+    """Bank factor for the multi-bank engine length formula.
+
+    Wiki text uses ``1 / arrangement`` when arrangement > 0, but save-game
+    calibration shows the game floors this at 0.5 (W-15 length matches ~56 in
+    with arrangement=3 only when banks=0.5, not 1/3).
+    """
+    if arrangement <= 0:
+        return 0.5
+    return max(0.5, 1.0 / float(arrangement))
+
+
+def _width_arrangement_scale(arrangement: int) -> float:
+    """Scale width for wide multi-bank layouts (save-calibrated)."""
+    if arrangement <= 2:
+        return 1.0
+    return math.sqrt(2.0 / float(arrangement))
+
+
 def calculate_engine_length(ctx: _WikiContext) -> float:
     """Calculate engine length in inches (wiki Length formula)."""
     inputs = ctx.inputs
@@ -415,9 +435,7 @@ def calculate_engine_length(ctx: _WikiContext) -> float:
         length = 3.0 + (0.039 * (bore_mm * 2.0)) + 5.0 * slider_len
         return length * bank
 
-    banks = 0.5
-    if arrangement > 0:
-        banks = 1.0 / arrangement
+    banks = _length_banks_factor(arrangement)
     length = (4.0 + ((disp * (banks * 2.0)) / (47.3 + 277.0))) * layout_len_sub
     length += (cylinders * banks) * (bore_mm / 130.0)
     length += (cylinders * (banks * 2.0)) + (5.0 * (bore_mm / 130.0)) + 2.0 * valve_size
@@ -435,6 +453,7 @@ def calculate_engine_width(ctx: _WikiContext) -> float:
     width = (6.0 + (disp / (57.3 + 302.0))) * ctx.layout_width_sub
     width += (6.0 * (bore_mm / 115.0)) + 5.0 * ctx.valve_size
     width += 0.16 * width * ctx.slider_layout_width
+    width *= _width_arrangement_scale(arrangement)
 
     if arrangement < -1:
         bank = 1.0 / (arrangement * -1.0)
