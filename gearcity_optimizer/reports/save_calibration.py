@@ -19,6 +19,13 @@ from gearcity_optimizer.importers.save_db import (
     load_save_game,
 )
 from gearcity_optimizer.importers.save_engine_flags import engine_formula_flags_from_save
+from gearcity_optimizer.reports.calibration_defaults import load_default_calibration_corrections
+from gearcity_optimizer.reports.save_calibration_corrections import CalibrationCorrections
+from gearcity_optimizer.reports.save_formula_bridge import (
+    apply_save_engine_physical_adjustments,
+    engine_save_formula_supported,
+    save_gearbox_max_torque_multiplier,
+)
 
 
 @dataclass(frozen=True)
@@ -107,6 +114,11 @@ def _engine_calibration_notes(
 ) -> list[str]:
     """Build explanatory notes for engine save vs formula gaps."""
     notes: list[str] = []
+    if not engine_save_formula_supported(record):
+        notes.append(
+            f"Fuel type {record.fuel_type!r} is outside the wiki gas/diesel engine formula; "
+            "physical and power comparisons are informational only."
+        )
     if record.mod_amount > 0:
         mod_year = record.mod_year if record.mod_year > 0 else "unknown"
         notes.append(
@@ -265,6 +277,8 @@ def gearbox_formula_inputs_from_save(
 def calibrate_engine_record(
     record: SaveEngineRecord,
     layout: SaveLayoutComponent | None,
+    *,
+    corrections: CalibrationCorrections | None = None,
 ) -> EngineCalibrationResult:
     """Replay one engine through wiki formulas and compare to save stats."""
     notes: list[str] = []
@@ -272,6 +286,9 @@ def calibrate_engine_record(
         notes.append(f"Layout '{record.layout}' not found in LayoutComponents table.")
 
     predicted = calculate_engine(engine_formula_inputs_from_save(record, layout))
+    predicted = apply_save_engine_physical_adjustments(predicted, record)
+    if corrections is not None:
+        predicted = corrections.apply_engine(predicted, record)
     notes.extend(_engine_calibration_notes(record, predicted))
     deltas = (
         _delta("length_in", record.length_in, predicted.length),
@@ -296,7 +313,11 @@ def calibrate_engine_record(
     )
 
 
-def calibrate_gearbox_record(record: SaveGearboxRecord) -> GearboxCalibrationResult:
+def calibrate_gearbox_record(
+    record: SaveGearboxRecord,
+    *,
+    corrections: CalibrationCorrections | None = None,
+) -> GearboxCalibrationResult:
     """Replay one gearbox through wiki formulas and compare to save stats."""
     notes: list[str] = []
     low_ratio, high_ratio = normalize_save_gear_ratios(
@@ -346,6 +367,9 @@ def calibrate_gearbox_record(record: SaveGearboxRecord) -> GearboxCalibrationRes
         record.high_ratio,
         record.year_built,
     )
+    max_torque_pred *= save_gearbox_max_torque_multiplier(record)
+    if corrections is not None:
+        max_torque_pred = corrections.apply_gearbox_max_torque(max_torque_pred, record)
 
     if predicted.power_rating > record.power_rating * 2.0 and record.power_rating > 0:
         notes.append(
@@ -412,8 +436,12 @@ def calibrate_save_game(
     gearbox_limit: int | None = 25,
     engine_ids: set[int] | None = None,
     gearbox_ids: set[int] | None = None,
+    corrections: CalibrationCorrections | None = None,
+    apply_corrections: bool = True,
 ) -> SaveCalibrationReport:
     """Load a save and compare formula outputs to in-game EngineInfo/GearboxInfo rows."""
+    if corrections is None and apply_corrections:
+        corrections = load_default_calibration_corrections()
     snapshot = load_save_game(path, company_id=company_id)
 
     engine_rows = snapshot.engines
@@ -429,10 +457,16 @@ def calibrate_save_game(
         gearbox_rows = gearbox_rows[:gearbox_limit]
 
     engine_results = tuple(
-        calibrate_engine_record(row, snapshot.layouts.get(row.layout))
+        calibrate_engine_record(
+            row,
+            snapshot.layouts.get(row.layout),
+            corrections=corrections,
+        )
         for row in engine_rows
     )
-    gearbox_results = tuple(calibrate_gearbox_record(row) for row in gearbox_rows)
+    gearbox_results = tuple(
+        calibrate_gearbox_record(row, corrections=corrections) for row in gearbox_rows
+    )
 
     engine_metrics = (
         "length_in",

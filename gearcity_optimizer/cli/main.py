@@ -172,6 +172,8 @@ SUBCOMMANDS = {
     "components-schema-audit",
     "optimize-design",
     "calibrate-save",
+    "calibration-research",
+    "calibration-fit",
 }
 
 UNKNOWN_SUBCOMMAND = "__unknown__"
@@ -1074,6 +1076,7 @@ def handle_calibrate_save(args: argparse.Namespace) -> int:
         gearbox_limit=limit if kind in {"gearbox", "all"} else 0,
         engine_ids=engine_ids,
         gearbox_ids=gearbox_ids,
+        apply_corrections=not args.no_corrections,
     )
 
     year = report.snapshot.current_year
@@ -1122,6 +1125,57 @@ def handle_calibrate_save(args: argparse.Namespace) -> int:
         if rows:
             pd.DataFrame(rows).to_csv(args.csv, index=False)
             print(f"Wrote CSV: {args.csv}")
+    return 0
+
+
+def handle_calibration_research(args: argparse.Namespace) -> int:
+    """Export calibration datasets and run grouped error analysis across saves."""
+    from gearcity_optimizer.reports.save_calibration_research import (
+        format_research_report,
+        run_calibration_research,
+    )
+
+    company_id = args.company_id if args.company_id >= 0 else None
+    result = run_calibration_research(
+        args.save,
+        company_id=company_id,
+        output_dir=args.output,
+    )
+    reports = result["reports"]
+    engine_df = result["engine_df"]
+    gearbox_df = result["gearbox_df"]
+    buckets = result["fix_buckets"]
+    corr_df = result["correlations_df"]
+    paths = result["paths"]
+
+    for line in format_research_report(reports, engine_df, gearbox_df, buckets, corr_df):
+        print(line)
+
+    if paths:
+        print("\nWrote research artifacts:")
+        for key, path in sorted(paths.items()):
+            print(f"  {key}: {path}")
+    return 0
+
+
+def handle_calibration_fit(args: argparse.Namespace) -> int:
+    """Fit segment corrections from one or more saves and report mass before/after quality."""
+    from gearcity_optimizer.reports.save_calibration_research import run_calibration_fit
+
+    company_id = args.company_id if args.company_id >= 0 else None
+    result = run_calibration_fit(
+        args.save,
+        company_id=company_id,
+        output_dir=args.output,
+        min_count=args.min_count,
+        min_abs_signed_pct=args.min_abs_signed_pct,
+    )
+    for line in result["fit_report_lines"]:
+        print(line)
+    print("\nWrote mass-fit artifacts:")
+    print(f"  corrections: {result['corrections_path']}")
+    print(f"  report: {result['fit_report_path']}")
+    print(f"  datasets: {args.output}/calibration_engines.csv (and related CSVs)")
     return 0
 
 
@@ -2162,6 +2216,67 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional CSV export path for metric deltas",
     )
+    calibrate_save_parser.add_argument(
+        "--no-corrections",
+        action="store_true",
+        help="Disable bundled segment corrections (formula bridge fixes still apply)",
+    )
+
+    calibration_research_parser = subparsers.add_parser(
+        "calibration-research",
+        help="Export calibration datasets and grouped fix-bucket analysis for one or more saves",
+    )
+    calibration_research_parser.add_argument(
+        "--save",
+        action="append",
+        required=True,
+        help="Path to a GearCity save game .db file (repeatable)",
+    )
+    calibration_research_parser.add_argument(
+        "--company-id",
+        type=int,
+        default=0,
+        help="Company_ID to filter (default: 0 player). Use -1 for all companies.",
+    )
+    calibration_research_parser.add_argument(
+        "--output",
+        required=True,
+        help="Directory for CSV datasets and research report",
+    )
+
+    calibration_fit_parser = subparsers.add_parser(
+        "calibration-fit",
+        help="Fit segment correction scales from save datasets and validate mass quality",
+    )
+    calibration_fit_parser.add_argument(
+        "--save",
+        action="append",
+        required=True,
+        help="Path to a GearCity save game .db file (repeatable)",
+    )
+    calibration_fit_parser.add_argument(
+        "--company-id",
+        type=int,
+        default=0,
+        help="Company_ID to filter (default: 0 player). Use -1 for all companies.",
+    )
+    calibration_fit_parser.add_argument(
+        "--output",
+        required=True,
+        help="Directory for corrections JSON, corrected CSVs, and fit report",
+    )
+    calibration_fit_parser.add_argument(
+        "--min-count",
+        type=int,
+        default=2,
+        help="Minimum rows per segment before fitting a correction (default: 2)",
+    )
+    calibration_fit_parser.add_argument(
+        "--min-abs-signed-pct",
+        type=float,
+        default=5.0,
+        help="Ignore segment metrics with |signed error| below this pct (default: 5)",
+    )
 
     group_vehicle_types_parser = subparsers.add_parser(
         "group-vehicle-types",
@@ -2226,6 +2341,8 @@ def build_parser() -> argparse.ArgumentParser:
         "components_schema_audit": components_schema_audit_parser,
         "optimize_design": optimize_design_parser,
         "calibrate_save": calibrate_save_parser,
+        "calibration_research": calibration_research_parser,
+        "calibration_fit": calibration_fit_parser,
         "group_vehicle_types": group_vehicle_types_parser,
     }
     return parser
@@ -2266,6 +2383,8 @@ def main(argv: list[str] | None = None) -> int:
     components_schema_audit_parser = cli_parsers["components_schema_audit"]
     optimize_design_parser = cli_parsers["optimize_design"]
     calibrate_save_parser = cli_parsers["calibrate_save"]
+    calibration_research_parser = cli_parsers["calibration_research"]
+    calibration_fit_parser = cli_parsers["calibration_fit"]
     group_vehicle_types_parser = cli_parsers["group_vehicle_types"]
 
     if subcommand == UNKNOWN_SUBCOMMAND:
@@ -2429,6 +2548,16 @@ def main(argv: list[str] | None = None) -> int:
         calibrate_save_parser.set_defaults(func=handle_calibrate_save)
         args = calibrate_save_parser.parse_args(remaining)
         return handle_calibrate_save(args)
+
+    if subcommand == "calibration-research":
+        calibration_research_parser.set_defaults(func=handle_calibration_research)
+        args = calibration_research_parser.parse_args(remaining)
+        return handle_calibration_research(args)
+
+    if subcommand == "calibration-fit":
+        calibration_fit_parser.set_defaults(func=handle_calibration_fit)
+        args = calibration_fit_parser.parse_args(remaining)
+        return handle_calibration_fit(args)
 
     parser.print_help()
     return 1

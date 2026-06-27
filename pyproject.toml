@@ -30,6 +30,9 @@ gearcity-optimizer = "gearcity_optimizer.cli.main:main"
 where = ["."]
 include = ["gearcity_optimizer*"]
 
+[tool.setuptools.package-data]
+gearcity_optimizer = ["resources/*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

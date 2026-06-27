@@ -1,0 +1,269 @@
+{
+  "version": 1,
+  "engine": {
+    "fuel_family=gasoline|layout=I|valve_family=F Head|mod_bucket=mod=0": {
+      "scales": {
+        "torque": 0.6248917707781444,
+        "horsepower": 0.7642913556337123,
+        "length": 1.010475157948101,
+        "width": 1.0495040193774812
+      },
+      "count": 2,
+      "level": 0,
+      "mean_signed_pct": {
+        "torque": 60.02771147950201,
+        "horsepower": 30.84015573757862,
+        "length": -1.0366566526358043,
+        "width": -4.716896597198809
+      }
+    },
+    "fuel_family=gasoline|layout=I|valve_family=F Head|mod_bucket=mod=1-2": {
+      "scales": {
+        "torque": 0.5514855992950897,
+        "horsepower": 0.626638600325712,
+        "length": 1.0090965956088918,
+        "width": 1.0653593080939638
+      },
+      "count": 4,
+      "level": 0,
+      "mean_signed_pct": {
+        "torque": 81.32839756436118,
+        "horsepower": 59.58161522131314,
+        "length": -0.9014593497268665,
+        "width": -6.1349544325001695
+      }
+    },
+    "fuel_family=gasoline|layout=I|valve_family=L Head|mod_bucket=mod=1-2": {
+      "scales": {
+        "torque": 0.73646680937118,
+        "horsepower": 0.5210760068234891,
+        "length": 1.0778675123769306,
+        "width": 1.0889265178910934
+      },
+      "count": 3,
+      "level": 0,
+      "mean_signed_pct": {
+        "torque": 35.78344431486782,
+        "horsepower": 91.91058250715874,
+        "length": -7.224219255408845,
+        "width": -8.166438821171877
+      }
+    },
+    "fuel_family=gasoline|layout=I|valve_family=SOHC|mod_bucket=mod=0": {
+      "scales": {
+        "torque": 0.8103535237762584,
+        "horsepower": 0.8908995835866368,
+        "length": 1.0195730199481399,
+        "width": 1.0870875130421815
+      },
+      "count": 3,
+      "level": 0,
+      "mean_signed_pct": {
+        "torque": 23.40293102447269,
+        "horsepower": 12.24609579164245,
+        "length": -1.919727137261382,
+        "width": -8.011085767922188
+      }
+    },
+    "fuel_family=gasoline|layout=W|valve_family=DOHC|mod_bucket=mod=0": {
+      "scales": {
+        "torque": 1.0000237745725578,
+        "horsepower": 0.9999841564701253,
+        "length": 1.1589227990390647,
+        "width": 1.1504832175974329
+      },
+      "count": 2,
+      "level": 0,
+      "mean_signed_pct": {
+        "torque": -0.0023774007340952585,
+        "horsepower": 0.0015843780896074855,
+        "length": -13.71297546056023,
+        "width": -13.080001106986035
+      }
+    },
+    "fuel_family=gasoline|layout=I|valve_family=F Head": {
+      "scales": {
+        "torque": 0.5514855992950897,
+        "horsepower": 0.626638600325712,
+        "length": 1.0104599921219284,
+        "width": 1.0653593080939638
+      },
+      "count": 6,
+      "level": 1,
+      "mean_signed_pct": {
+        "torque": 81.32839756436118,
+        "horsepower": 59.58161522131314,
+        "length": -1.0351713282544537,
+        "width": -6.1349544325001695
+      }
+    },
+    "fuel_family=gasoline|layout=I|valve_family=L Head": {
+      "scales": {
+        "torque": 0.73646680937118,
+        "horsepower": 0.5210760068234891,
+        "length": 1.0778675123769306,
+        "width": 1.0889265178910934
+      },
+      "count": 3,
+      "level": 1,
+      "mean_signed_pct": {
+        "torque": 35.78344431486782,
+        "horsepower": 91.91058250715874,
+        "length": -7.224219255408845,
+        "width": -8.166438821171877
+      }
+    },
+    "fuel_family=gasoline|layout=I|valve_family=SOHC": {
+      "scales": {
+        "torque": 0.8103535237762584,
+        "horsepower": 0.8908995835866368,
+        "length": 1.0195730199481399,
+        "width": 1.0870875130421815
+      },
+      "count": 3,
+      "level": 1,
+      "mean_signed_pct": {
+        "torque": 23.40293102447269,
+        "horsepower": 12.24609579164245,
+        "length": -1.919727137261382,
+        "width": -8.011085767922188
+      }
+    },
+    "fuel_family=gasoline|layout=W|valve_family=DOHC": {
+      "scales": {
+        "torque": 0.9929653532293943,
+        "horsepower": 1.003523862019605,
+        "length": 1.1584193419226294,
+        "width": 1.1366563901777818
+      },
+      "count": 3,
+      "level": 1,
+      "mean_signed_pct": {
+        "torque": 0.7084483610356742,
+        "horsepower": -0.3511488020337813,
+        "length": -13.675474518553946,
+        "width": -12.02266501632984
+      }
+    },
+    "fuel_family=gasoline|layout=I": {
+      "scales": {
+        "torque": 0.6386121831369681,
+        "horsepower": 0.6243980625497393,
+        "length": 1.019134945642889,
+        "width": 1.081993661494252
+      },
+      "count": 12,
+      "level": 2,
+      "mean_signed_pct": {
+        "torque": 56.589558797302544,
+        "horsepower": 60.154244540171106,
+        "length": -1.8775674138833898,
+        "width": -7.578016804739625
+      }
+    },
+    "fuel_family=gasoline|layout=W": {
+      "scales": {
+        "torque": 0.9929653532293943,
+        "horsepower": 1.003523862019605,
+        "length": 1.1584193419226294,
+        "width": 1.1366563901777818
+      },
+      "count": 3,
+      "level": 2,
+      "mean_signed_pct": {
+        "torque": 0.7084483610356742,
+        "horsepower": -0.3511488020337813,
+        "length": -13.675474518553946,
+        "width": -12.02266501632984
+      }
+    },
+    "fuel_family=gasoline": {
+      "scales": {
+        "torque": 0.8103535237762584,
+        "horsepower": 0.6426897143597928,
+        "length": 1.0195730199481399,
+        "width": 1.0820088160430874
+      },
+      "count": 15,
+      "level": 3,
+      "mean_signed_pct": {
+        "torque": 23.40293102447269,
+        "horsepower": 55.59607967215364,
+        "length": -1.919727137261382,
+        "width": -7.579311261343887
+      }
+    }
+  },
+  "gearbox": {
+    "mod_bucket=mod=1-2|ratio_pattern=hi_max|gears=1": {
+      "scales": {
+        "max_torque": 0.46882972143999413
+      },
+      "count": 2,
+      "level": 0,
+      "mean_signed_pct": {
+        "max_torque": 113.29705738973519
+      }
+    },
+    "mod_bucket=mod=3+|ratio_pattern=hi_max|gears=5": {
+      "scales": {
+        "max_torque": 0.8932143436525033
+      },
+      "count": 2,
+      "level": 0,
+      "mean_signed_pct": {
+        "max_torque": 11.955210650876063
+      }
+    },
+    "mod_bucket=mod=3+|ratio_pattern=lo0_hi0|gears=5": {
+      "scales": {
+        "max_torque": 0.9271423078358468
+      },
+      "count": 2,
+      "level": 0,
+      "mean_signed_pct": {
+        "max_torque": 7.8583073545871205
+      }
+    },
+    "mod_bucket=mod=1-2|ratio_pattern=hi_max": {
+      "scales": {
+        "max_torque": 0.7938809335588278
+      },
+      "count": 4,
+      "level": 1,
+      "mean_signed_pct": {
+        "max_torque": 25.963473579996048
+      }
+    },
+    "mod_bucket=mod=1-2|ratio_pattern=mid": {
+      "scales": {
+        "max_torque": 1.2275797430295066
+      },
+      "count": 2,
+      "level": 1,
+      "mean_signed_pct": {
+        "max_torque": -18.53889690847044
+      }
+    },
+    "mod_bucket=mod=3+|ratio_pattern=lo0_hi0": {
+      "scales": {
+        "max_torque": 0.9271423078358468
+      },
+      "count": 2,
+      "level": 1,
+      "mean_signed_pct": {
+        "max_torque": 7.8583073545871205
+      }
+    },
+    "mod_bucket=mod=3+": {
+      "scales": {
+        "max_torque": 0.9282988655348106
+      },
+      "count": 5,
+      "level": 2,
+      "mean_signed_pct": {
+        "max_torque": 7.723927834801471
+      }
+    }
+  }
+}

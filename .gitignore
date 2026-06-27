@@ -35,6 +35,8 @@ Thumbs.db
 
 # Generated project outputs
 generated/
+calibration_fit/
+calibration_research/
 
 # Downloaded wiki caches
 sources/wiki_html/
