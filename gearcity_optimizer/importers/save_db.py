@@ -18,6 +18,7 @@ class SaveLayoutComponent:
     layout_fuel: float
     layout_smooth: float
     cylinder_length_arrangement: int
+    layout_weight: float
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,11 @@ class SaveEngineRecord:
     slider_design_fuel: float
     slider_design_dependability: float
     design_pace: float
+    mod_amount: int
+    mod_year: int
+    static_engine_power_rating: float
+    static_engine_fuel_rating: float
+    static_engine_reliability_rating: float
 
 
 @dataclass(frozen=True)
@@ -170,7 +176,8 @@ def load_save_game(path: str | Path, *, company_id: int | None = None) -> SaveGa
         for row in conn.execute(
             """
             SELECT Name, Engine_Length, Engine_Width, Engine_LayoutPower,
-                   Engine_LayoutFuel, Engine_LayoutSmooth, CylinderLengthArrangment
+                   Engine_LayoutFuel, Engine_LayoutSmooth, CylinderLengthArrangment,
+                   Weight
             FROM LayoutComponents
             """
         ):
@@ -185,6 +192,7 @@ def load_save_game(path: str | Path, *, company_id: int | None = None) -> SaveGa
                 layout_fuel=_float(row["Engine_LayoutFuel"], 0.3),
                 layout_smooth=_float(row["Engine_LayoutSmooth"], 0.3),
                 cylinder_length_arrangement=_int(row["CylinderLengthArrangment"], 1),
+                layout_weight=_float(row["Weight"], 0.3),
             )
 
         engine_query = "SELECT * FROM EngineInfo"
@@ -240,6 +248,11 @@ def load_save_game(path: str | Path, *, company_id: int | None = None) -> SaveGa
                     slider_design_fuel=_float(row["slider_designfueleco"]),
                     slider_design_dependability=_float(row["slider_designdependability"]),
                     design_pace=_float(row["DesignPace"], 0.5),
+                    mod_amount=_int(row["ModAmount"]),
+                    mod_year=_int(row["ModYear"]),
+                    static_engine_power_rating=_float(row["StaticenginePower"]),
+                    static_engine_fuel_rating=_float(row["StaticengineFuelEco"]),
+                    static_engine_reliability_rating=_float(row["StaticengineReliability"]),
                 )
             )
 

@@ -101,6 +101,68 @@ def _infer_gearbox_torque_slider(
     return best
 
 
+def _engine_calibration_notes(
+    record: SaveEngineRecord,
+    predicted: object,
+) -> list[str]:
+    """Build explanatory notes for engine save vs formula gaps."""
+    notes: list[str] = []
+    if record.mod_amount > 0:
+        mod_year = record.mod_year if record.mod_year > 0 else "unknown"
+        notes.append(
+            f"Engine has ModAmount={record.mod_amount} (ModYear={mod_year}); "
+            "weight and live stats may include modification uplift not in the wiki formula."
+        )
+
+    static_pairs = (
+        ("enginePower", record.static_engine_power_rating, record.engine_power_rating),
+        ("engineFuelEco", record.static_engine_fuel_rating, record.engine_fuel_rating),
+        (
+            "engineReliability",
+            record.static_engine_reliability_rating,
+            record.engine_reliability_rating,
+        ),
+    )
+    stale_fields: list[str] = []
+    for label, static_value, live_value in static_pairs:
+        if static_value <= 0:
+            continue
+        if abs(live_value - static_value) / max(static_value, 1.0) > 0.35:
+            stale_fields.append(label)
+
+    if stale_fields:
+        notes.append(
+            "Stored ratings differ sharply from static design-time ratings for "
+            f"{', '.join(stale_fields)}; live fields may be stale or degraded."
+        )
+
+    predicted_reliability = getattr(predicted, "reliability_rating", 0.0)
+    if (
+        record.engine_reliability_rating > 0
+        and predicted_reliability > record.engine_reliability_rating * 1.5
+        and record.static_engine_reliability_rating
+        > record.engine_reliability_rating * 1.5
+    ):
+        notes.append(
+            "Formula reliability replay is closer to static design ratings than to "
+            "the live engineReliability field in this save row."
+        )
+
+    weight_delta = getattr(predicted, "weight", 0.0) - record.weight_lb
+    if record.weight_lb > 0 and weight_delta < -0.1 * record.weight_lb:
+        notes.append(
+            "Predicted weight is below save weight; check layout subcomponent weight "
+            "and ModAmount when comparing."
+        )
+    elif record.weight_lb > 0 and weight_delta > 0.1 * record.weight_lb:
+        notes.append(
+            "Predicted weight exceeds save weight; layout or slider weight mapping "
+            "may still differ from in-game replay."
+        )
+
+    return notes
+
+
 def engine_formula_inputs_from_save(
     record: SaveEngineRecord,
     layout: SaveLayoutComponent | None,
@@ -110,6 +172,7 @@ def engine_formula_inputs_from_save(
     sub_length = layout.engine_length if layout is not None else 0.42
     sub_width = layout.engine_width if layout is not None else 0.42
     layout_power = layout.layout_power if layout is not None else 0.3
+    layout_sub_weight = layout.layout_weight if layout is not None else 0.3
 
     kwargs: dict[str, object] = {
         "name": record.name,
@@ -119,7 +182,8 @@ def engine_formula_inputs_from_save(
         "layout_length": sub_length,
         "layout_width": sub_width,
         "layout_performance": layout_power,
-        "layout_weight": record.slider_weight if record.slider_weight > 0 else 0.3,
+        "layout_weight": layout_sub_weight,
+        "wiki_slider_layout_weight": record.slider_weight,
         "design_performance": record.slider_design_performance,
         "design_fuel_economy": record.slider_design_fuel,
         "design_dependability": record.slider_design_dependability,
@@ -196,6 +260,7 @@ def calibrate_engine_record(
         notes.append(f"Layout '{record.layout}' not found in LayoutComponents table.")
 
     predicted = calculate_engine(engine_formula_inputs_from_save(record, layout))
+    notes.extend(_engine_calibration_notes(record, predicted))
     deltas = (
         _delta("length_in", record.length_in, predicted.length),
         _delta("width_in", record.width_in, predicted.width),

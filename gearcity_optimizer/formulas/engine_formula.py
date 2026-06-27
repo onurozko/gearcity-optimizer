@@ -144,6 +144,7 @@ class EngineFormulaInputs:
     wiki_slider_performance_torque: float | None = None
     wiki_slider_performance_revolutions: float | None = None
     wiki_slider_performance_fuel: float | None = None
+    wiki_slider_layout_weight: float | None = None
     wiki_valve_rpm: float | None = None
     wiki_fuel_rpm: float | None = None
 
@@ -302,7 +303,11 @@ def _build_wiki_context(inputs: EngineFormulaInputs) -> _WikiContext:
         else _clamp01(inputs.layout_width * 0.5 + layout_disp * 0.5)
     )
     slider_layout_displacement = layout_disp
-    slider_layout_weight = _clamp01(inputs.layout_weight)
+    slider_layout_weight = (
+        inputs.wiki_slider_layout_weight
+        if inputs.wiki_slider_layout_weight is not None
+        else _clamp01(inputs.layout_weight)
+    )
 
     perf_torque = (
         inputs.wiki_slider_performance_torque

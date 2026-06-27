@@ -35,9 +35,10 @@ def sample_save_db(tmp_path: Path) -> Path:
                 Engine_LayoutPower REAL,
                 Engine_LayoutFuel REAL,
                 Engine_LayoutSmooth REAL,
-                CylinderLengthArrangment INTEGER
+                CylinderLengthArrangment INTEGER,
+                Weight REAL
             );
-            INSERT INTO LayoutComponents VALUES ('W', 0.85, 1.3, 1.0, 0.5, 0.5, 3);
+            INSERT INTO LayoutComponents VALUES ('W', 0.85, 1.3, 1.0, 0.5, 0.5, 3, 1.5);
 
             CREATE TABLE EngineInfo (
                 Engine_ID INTEGER PRIMARY KEY,
@@ -80,7 +81,12 @@ def sample_save_db(tmp_path: Path) -> Path:
                 bore REAL,
                 stroke REAL,
                 DesignPace REAL,
-                CylinderNumberForCalculations INTEGER
+                CylinderNumberForCalculations INTEGER,
+                ModAmount INTEGER,
+                ModYear INTEGER,
+                StaticenginePower REAL,
+                StaticengineFuelEco REAL,
+                StaticengineReliability REAL
             );
             INSERT INTO EngineInfo (
                 Engine_ID, Company_ID, Name, yearbuilt, Layout, Cylinders, Fueltype,
@@ -90,12 +96,14 @@ def sample_save_db(tmp_path: Path) -> Path:
                 slider_designperformance, slider_designfueleco, slider_designdependability,
                 hp, torque, rpm, weight, size_cc, length, width, fuelmilage,
                 enginePower, engineFuelEco, engineReliability, overallRating,
-                bore, stroke, DesignPace, CylinderNumberForCalculations
+                bore, stroke, DesignPace, CylinderNumberForCalculations,
+                ModAmount, ModYear, StaticenginePower, StaticengineFuelEco, StaticengineReliability
             ) VALUES (
                 707, 0, 'R-204P-343T-G', 1906, 'W', '15', 'Gasoline',
-                'Naturally Aspirated', 'DOHC', 0.388, 0.0, 0.0, 0.3, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,
-                1.0, 0.0, 0.0, 223, 291, 3000, 500, 10097, 56, 42, 8.78,
-                24.6, 7.3, 50, 26, 123.0, 56.65, 0.318182, 15
+                'Naturally Aspirated', 'DOHC', 0.388, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,
+                1.0, 0.0, 0.0, 223, 291, 3000, 596, 10097, 56, 42, 8.78,
+                24.6, 7.3, 14.6, 13.6, 123.0, 56.65, 0.318182, 15,
+                2, 1920, 23.0, 6.0, 60.0
             );
 
             CREATE TABLE GearboxInfo (
@@ -180,6 +188,17 @@ def test_calibrate_engine_produces_metric_deltas(sample_save_db: Path):
     assert metrics["torque_lbft"].abs_error < 20.0
     assert metrics["horsepower"].pct_error is not None
     assert metrics["horsepower"].pct_error < 12.0
+    assert metrics["weight_lb"].pct_error is not None
+    assert metrics["weight_lb"].pct_error < 12.0
+
+
+def test_calibrate_engine_notes_mod_and_stale_ratings(sample_save_db: Path):
+    snapshot = load_save_game(sample_save_db, company_id=0)
+    engine = snapshot.engines[0]
+    result = calibrate_engine_record(engine, snapshot.layouts.get(engine.layout))
+    joined = " ".join(result.notes)
+    assert "ModAmount=2" in joined
+    assert "static design-time ratings" in joined
 
 
 def test_calibrate_save_game_report(sample_save_db: Path):

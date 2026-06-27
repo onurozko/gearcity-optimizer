@@ -94,7 +94,7 @@ def test_optimizer_returns_slider_values_and_predicted_outputs_separately(
     )
     assert result.control_settings
     assert result.predicted_outputs
-    assert any(item.label == "Torque" for item in result.predicted_outputs)
+    assert any(item.label == "Torque (lb-ft)" for item in result.predicted_outputs)
     assert any("Formula-model" in item.reason for item in result.control_settings)
     assert result.tradeoffs
     assert result.limitations
