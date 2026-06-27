@@ -439,6 +439,7 @@ def calibrate_save_game(
         "width_in",
         "torque_lbft",
         "horsepower",
+        "weight_lb",
         "engine_power_rating",
         "engine_fuel_rating",
     )
@@ -506,6 +507,9 @@ def report_to_csv_rows(report: SaveCalibrationReport) -> list[dict[str, object]]
             "name": item.record.name,
             "year": item.record.year_built,
             "layout": item.record.layout,
+            "fuel_type": item.record.fuel_type,
+            "valve": item.record.valve,
+            "mod_amount": item.record.mod_amount,
             "cylinders": item.record.cylinder_count,
             "bore_mm": item.record.bore,
             "stroke_mm": item.record.stroke,
@@ -529,6 +533,10 @@ def report_to_csv_rows(report: SaveCalibrationReport) -> list[dict[str, object]]
             "year": item.record.year_built,
             "gears": item.record.gears,
             "gearbox_type": item.record.gearbox_type,
+            "mod_amount": item.record.mod_amount,
+            "lo_ratio": item.record.low_ratio,
+            "hi_ratio": item.record.high_ratio,
+            "torque_input_ratio": item.record.torque_input_ratio,
             "inferred_torque_slider": item.inferred_torque_max_input_slider,
         }
         for delta in item.deltas:

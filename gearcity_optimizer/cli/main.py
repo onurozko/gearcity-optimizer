@@ -1055,11 +1055,12 @@ def handle_calibrate_save(args: argparse.Namespace) -> int:
         format_gearbox_calibration_lines,
         report_to_csv_rows,
     )
+    from gearcity_optimizer.reports.save_calibration_analysis import format_calibration_analysis
 
     company_id = args.company_id if args.company_id >= 0 else None
     engine_ids = set(args.engine_id) if args.engine_id else None
     gearbox_ids = set(args.gearbox_id) if args.gearbox_id else None
-    limit = None if args.all else args.limit
+    limit = None if args.all or args.analyze else args.limit
     kind = args.kind
     if kind == "all" and engine_ids and not gearbox_ids:
         kind = "engine"
@@ -1093,6 +1094,16 @@ def handle_calibrate_save(args: argparse.Namespace) -> int:
         for key, value in sorted(report.gearbox_summary.items()):
             print(f"  {key}: {value:.2f}")
         print()
+
+    if args.analyze:
+        for line in format_calibration_analysis(report):
+            print(line)
+        if args.csv:
+            rows = report_to_csv_rows(report)
+            if rows:
+                pd.DataFrame(rows).to_csv(args.csv, index=False)
+                print(f"Wrote CSV: {args.csv}")
+        return 0
 
     if kind in {"engine", "all"}:
         for item in report.engines:
@@ -2140,6 +2151,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=None,
         help="Compare one Gearbox_ID (repeatable)",
+    )
+    calibrate_save_parser.add_argument(
+        "--analyze",
+        action="store_true",
+        help="Compare all rows and print grouped error analysis (implies --all)",
     )
     calibrate_save_parser.add_argument(
         "--csv",

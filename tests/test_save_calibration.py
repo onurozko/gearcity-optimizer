@@ -13,6 +13,7 @@ from gearcity_optimizer.reports.save_calibration import (
     calibrate_gearbox_record,
     calibrate_save_game,
 )
+from gearcity_optimizer.reports.save_calibration_analysis import format_calibration_analysis
 
 
 @pytest.fixture
@@ -215,3 +216,13 @@ def test_calibrate_gearbox_matches_save_max_torque(sample_save_db: Path):
     torque_delta = next(item for item in result.deltas if item.metric == "max_torque_lbft")
     assert torque_delta.pct_error is not None
     assert torque_delta.pct_error < 5.0
+
+
+def test_format_calibration_analysis_runs(sample_save_db: Path):
+    report = calibrate_save_game(
+        str(sample_save_db), company_id=0, engine_limit=None, gearbox_limit=None
+    )
+    text = "\n".join(format_calibration_analysis(report))
+    assert "Save-wide analysis" in text
+    assert "Engine groups" in text
+    assert "Gearbox groups" in text
