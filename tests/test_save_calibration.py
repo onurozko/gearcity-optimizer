@@ -187,7 +187,7 @@ def test_calibrate_engine_produces_metric_deltas(sample_save_db: Path):
     assert metrics["width_in"].abs_error < 5.0
     assert metrics["torque_lbft"].abs_error < 20.0
     assert metrics["horsepower"].pct_error is not None
-    assert metrics["horsepower"].pct_error < 12.0
+    assert metrics["horsepower"].pct_error < 5.0
     assert metrics["weight_lb"].pct_error is not None
     assert metrics["weight_lb"].pct_error < 12.0
 

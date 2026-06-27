@@ -114,6 +114,18 @@ def _engine_calibration_notes(
             "weight and live stats may include modification uplift not in the wiki formula."
         )
 
+    if (
+        record.horsepower > 0
+        and record.torque_lbft > 0
+        and record.rpm > 0
+    ):
+        implied_hp = record.torque_lbft * record.rpm / 5252.0
+        if abs(implied_hp - record.horsepower) / record.horsepower > 0.05:
+            notes.append(
+                "Save hp, torque, and rpm fields are not consistent with hp = torque * rpm / 5252; "
+                "horsepower comparison uses the stored hp field."
+            )
+
     static_pairs = (
         ("enginePower", record.static_engine_power_rating, record.engine_power_rating),
         ("engineFuelEco", record.static_engine_fuel_rating, record.engine_fuel_rating),

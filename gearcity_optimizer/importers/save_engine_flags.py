@@ -5,9 +5,9 @@ def _valve_rpm_subcomponent(valve: str) -> float:
     """Approximate SubComponent_Valve_RPM from save Valve text."""
     valve_text = valve.lower()
     if "dohc" in valve_text:
-        return 1.30
+        return 1.18
     if "sohc" in valve_text:
-        return 1.15
+        return 1.12
     if any(token in valve_text for token in ("ohv", "overhead")):
         return 0.95
     return 0.80
