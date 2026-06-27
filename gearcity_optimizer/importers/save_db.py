@@ -81,7 +81,9 @@ class SaveGearboxRecord:
     has_transaxle: bool
     low_ratio: float
     high_ratio: float
+    torque_input_ratio: float
     max_torque_input_lbft: float
+    mod_amount: int
     weight_lb: float
     power_rating: float
     fuel_rating: float
@@ -95,6 +97,7 @@ class SaveGearboxRecord:
     design_performance: float
     design_fuel: float
     design_dependability: float
+    design_ease: float
     sub_weight: float
     sub_complexity: float
     sub_smoothness: float
@@ -261,9 +264,11 @@ def load_save_game(path: str | Path, *, company_id: int | None = None) -> SaveGa
                     has_overdrive=_bool(row["Overdrive"]),
                     has_limited_slip=_bool(row["Limited"]),
                     has_transaxle=_bool(row["Transaxle"]),
-                    low_ratio=_float(row["LoRatio"], 0.5),
-                    high_ratio=_float(row["HiRatio"], 0.5),
+                    low_ratio=_float(row["LoRatio"]),
+                    high_ratio=_float(row["HiRatio"]),
+                    torque_input_ratio=_float(row["TorqueInputRatio"], 0.3),
                     max_torque_input_lbft=_float(row["MaxTorqueInput"]),
+                    mod_amount=_int(row["ModAmount"]),
                     weight_lb=_float(row["Weight"]),
                     power_rating=_float(row["PowerRating"]),
                     fuel_rating=_float(row["FuelRating"]),
@@ -277,6 +282,7 @@ def load_save_game(path: str | Path, *, company_id: int | None = None) -> SaveGa
                     design_performance=_float(row["de_performance"]),
                     design_fuel=_float(row["de_fuel"]),
                     design_dependability=_float(row["de_depend"]),
+                    design_ease=_float(row["de_comfort"]),
                     sub_weight=_float(row["GB_Weight"], 0.3),
                     sub_complexity=_float(row["GB_Complexity"], 0.3),
                     sub_smoothness=_float(row["GB_Smoothness"], 0.3),

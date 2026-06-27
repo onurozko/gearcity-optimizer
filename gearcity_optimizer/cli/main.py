@@ -1060,12 +1060,17 @@ def handle_calibrate_save(args: argparse.Namespace) -> int:
     engine_ids = set(args.engine_id) if args.engine_id else None
     gearbox_ids = set(args.gearbox_id) if args.gearbox_id else None
     limit = None if args.all else args.limit
+    kind = args.kind
+    if kind == "all" and engine_ids and not gearbox_ids:
+        kind = "engine"
+    elif kind == "all" and gearbox_ids and not engine_ids:
+        kind = "gearbox"
 
     report = calibrate_save_game(
         args.save,
         company_id=company_id,
-        engine_limit=limit if args.kind in {"engine", "all"} else 0,
-        gearbox_limit=limit if args.kind in {"gearbox", "all"} else 0,
+        engine_limit=limit if kind in {"engine", "all"} else 0,
+        gearbox_limit=limit if kind in {"gearbox", "all"} else 0,
         engine_ids=engine_ids,
         gearbox_ids=gearbox_ids,
     )
@@ -1089,13 +1094,13 @@ def handle_calibrate_save(args: argparse.Namespace) -> int:
             print(f"  {key}: {value:.2f}")
         print()
 
-    if args.kind in {"engine", "all"}:
+    if kind in {"engine", "all"}:
         for item in report.engines:
             for line in format_engine_calibration_lines(item):
                 print(line)
             print()
 
-    if args.kind in {"gearbox", "all"}:
+    if kind in {"gearbox", "all"}:
         for item in report.gearboxes:
             for line in format_gearbox_calibration_lines(item):
                 print(line)

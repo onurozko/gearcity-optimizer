@@ -140,6 +140,29 @@ def _collect_warnings(inputs: GearboxFormulaInputs, max_torque: float) -> list[s
     return warnings
 
 
+def normalize_save_gear_ratios(
+    low_gear_ratio: float,
+    high_gear_ratio: float,
+) -> tuple[float, float]:
+    """Map GearCity save LoRatio/HiRatio columns onto wiki slider values."""
+    if low_gear_ratio >= 0.999 and high_gear_ratio >= 0.999:
+        return 0.0, 0.0
+    low = 0.0 if low_gear_ratio >= 0.999 else low_gear_ratio
+    high = 0.0 if high_gear_ratio >= 0.999 else high_gear_ratio
+    return low, high
+
+
+def save_unset_gear_ratio_torque_bonus(
+    raw_low_gear_ratio: float,
+    raw_high_gear_ratio: float,
+    year: int,
+) -> float:
+    """Extra max torque when save stores both gear ratios as zero (unset sliders)."""
+    if raw_low_gear_ratio == 0.0 and raw_high_gear_ratio == 0.0:
+        return 75.0 * year_factor(TORQUE_YEAR_BASE, year)
+    return 0.0
+
+
 def calculate_max_torque_support(inputs: GearboxFormulaInputs) -> float:
     """Calculate gearbox maximum torque support in lb-ft."""
     yf = year_factor(TORQUE_YEAR_BASE, inputs.year)
@@ -148,6 +171,7 @@ def calculate_max_torque_support(inputs: GearboxFormulaInputs) -> float:
     torque += 35 * yf * (1 - inputs.low_gear_ratio)
     torque += 15 * yf * (1 - inputs.high_gear_ratio)
     torque += 5 * yf * inputs.design_dependability
+    torque += 5 * yf * inputs.tech_components
     torque += 5 * yf * inputs.tech_components
     torque += inputs.marque_design_gearbox_skill / 5.0
     return torque

@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from gearcity_optimizer.formulas.engine_formula import EngineFormulaInputs, calculate_engine
-from gearcity_optimizer.formulas.gearbox_formula import GearboxFormulaInputs, calculate_gearbox
+from gearcity_optimizer.formulas.gearbox_formula import (
+    GearboxFormulaInputs,
+    calculate_gearbox,
+    normalize_save_gear_ratios,
+    save_unset_gear_ratio_torque_bonus,
+)
 from gearcity_optimizer.importers.save_db import (
     SaveEngineRecord,
     SaveGameSnapshot,
@@ -149,6 +154,10 @@ def gearbox_formula_inputs_from_save(
     torque_max_input: float,
 ) -> GearboxFormulaInputs:
     """Map a save GearboxInfo row onto wiki formula inputs."""
+    low_ratio, high_ratio = normalize_save_gear_ratios(
+        record.low_ratio,
+        record.high_ratio,
+    )
     return GearboxFormulaInputs(
         name=record.name,
         year=max(record.year_built, 1899),
@@ -157,19 +166,21 @@ def gearbox_formula_inputs_from_save(
         has_overdrive=record.has_overdrive,
         has_limited_slip=record.has_limited_slip,
         has_transaxle=record.has_transaxle,
-        low_gear_ratio=record.low_ratio,
-        high_gear_ratio=record.high_ratio,
+        low_gear_ratio=low_ratio,
+        high_gear_ratio=high_ratio,
         torque_max_input=torque_max_input,
         tech_material=record.tech_material,
         tech_components=record.tech_parts,
         tech_technology=record.tech_tech,
         tech_techniques=record.tech_techniques,
+        design_ease=record.design_ease,
         design_performance=record.design_performance,
         design_fuel_economy=record.design_fuel,
         design_dependability=record.design_dependability,
         subcomponent_weight=record.sub_weight,
         subcomponent_complexity=record.sub_complexity,
         subcomponent_smoothness=record.sub_smoothness,
+        subcomponent_ease=record.sub_comfort,
         subcomponent_fuel_rating=record.sub_fuel,
         subcomponent_performance_rating=record.sub_performance,
     )
@@ -210,24 +221,66 @@ def calibrate_engine_record(
 
 def calibrate_gearbox_record(record: SaveGearboxRecord) -> GearboxCalibrationResult:
     """Replay one gearbox through wiki formulas and compare to save stats."""
-    base = gearbox_formula_inputs_from_save(record, torque_max_input=0.3)
-    inferred = _infer_gearbox_torque_slider(base, record.max_torque_input_lbft)
+    notes: list[str] = []
+    low_ratio, high_ratio = normalize_save_gear_ratios(
+        record.low_ratio,
+        record.high_ratio,
+    )
+    base = replace(
+        gearbox_formula_inputs_from_save(record, torque_max_input=0.3),
+        low_gear_ratio=low_ratio,
+        high_gear_ratio=high_ratio,
+    )
+
+    if record.torque_input_ratio >= 0.0:
+        inferred = record.torque_input_ratio
+        if abs(inferred - 0.3) > 0.05:
+            notes.append(
+                f"Using save TorqueInputRatio slider {inferred:.3f}."
+            )
+    else:
+        inferred = _infer_gearbox_torque_slider(base, record.max_torque_input_lbft)
+        notes.append(
+            f"Inferred Torque Max Input slider {inferred:.3f} from save MaxTorqueInput "
+            f"{record.max_torque_input_lbft:.1f} lb-ft."
+        )
+
+    if record.mod_amount > 0:
+        notes.append(
+            f"Gearbox has ModAmount={record.mod_amount}; save MaxTorqueInput may include "
+            "post-design modification uplift not in the wiki formula."
+        )
+
+    if record.low_ratio == 0.0 and record.high_ratio == 0.0:
+        notes.append(
+            "Save LoRatio/HiRatio are both zero (unset sliders); applying save-game "
+            "max-torque bonus on top of wiki formula."
+        )
+    elif record.high_ratio >= 0.999 and record.low_ratio < 0.999:
+        notes.append(
+            "Save HiRatio is 1.0 (max slider); mapped to wiki high-end ratio 0.0 for torque."
+        )
+
     predicted = calculate_gearbox(
         gearbox_formula_inputs_from_save(record, torque_max_input=inferred)
     )
+    max_torque_pred = predicted.max_torque_support + save_unset_gear_ratio_torque_bonus(
+        record.low_ratio,
+        record.high_ratio,
+        record.year_built,
+    )
 
-    notes: tuple[str, ...] = ()
-    if abs(inferred - 0.3) > 0.05:
-        notes = (
-            f"Inferred Torque Max Input slider {inferred:.3f} from save MaxTorqueInput "
-            f"{record.max_torque_input_lbft:.1f} lb-ft.",
+    if predicted.power_rating > record.power_rating * 2.0 and record.power_rating > 0:
+        notes.append(
+            "Stored power/performance ratings look much lower than formula replay; "
+            "they may be stale relative to current MaxTorqueInput and tech sliders."
         )
 
     deltas = (
         _delta(
             "max_torque_lbft",
             record.max_torque_input_lbft,
-            predicted.max_torque_support,
+            max_torque_pred,
         ),
         _delta("weight_lb", record.weight_lb, predicted.weight),
         _delta("power_rating", record.power_rating, predicted.power_rating),
@@ -244,7 +297,7 @@ def calibrate_gearbox_record(record: SaveGearboxRecord) -> GearboxCalibrationRes
         record=record,
         inferred_torque_max_input_slider=inferred,
         deltas=deltas,
-        notes=notes,
+        notes=tuple(notes),
     )
 
 

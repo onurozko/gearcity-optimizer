@@ -144,6 +144,8 @@ class EngineFormulaInputs:
     wiki_slider_performance_torque: float | None = None
     wiki_slider_performance_revolutions: float | None = None
     wiki_slider_performance_fuel: float | None = None
+    wiki_valve_rpm: float | None = None
+    wiki_fuel_rpm: float | None = None
 
     def __post_init__(self) -> None:
         if self.year < YEAR_BASE:
@@ -324,7 +326,10 @@ def _build_wiki_context(inputs: EngineFormulaInputs) -> _WikiContext:
     valve_power = 0.82 + 0.12 * bool01(inputs.has_overhead_cam) + 0.06 * bool01(
         inputs.has_fuel_injection
     )
-    valve_rpm = 0.80 + 0.15 * bool01(inputs.has_overhead_cam)
+    if inputs.wiki_valve_rpm is not None:
+        valve_rpm = inputs.wiki_valve_rpm
+    else:
+        valve_rpm = 0.80 + 0.15 * bool01(inputs.has_overhead_cam)
     valve_size = 0.20 + 0.20 * bool01(inputs.has_overhead_cam)
 
     induction_power = inputs.aspiration_performance * asp_q
@@ -365,7 +370,11 @@ def _build_wiki_context(inputs: EngineFormulaInputs) -> _WikiContext:
         ),
         fuel_rel=inputs.fuel_system_reliability * fuel_q,
         fuel_weight=inputs.layout_weight * 0.15,
-        fuel_rpm=0.75 + 0.25 * inputs.design_performance,
+        fuel_rpm=(
+            inputs.wiki_fuel_rpm
+            if inputs.wiki_fuel_rpm is not None
+            else 0.75 + 0.25 * inputs.design_performance
+        ),
         fuel_smooth=inputs.layout_smoothness * 0.8,
         fuel_design=inputs.layout_design * 0.6,
         fuel_manu=inputs.layout_manufacturing * 0.5,

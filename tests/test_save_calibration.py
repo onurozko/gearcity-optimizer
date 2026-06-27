@@ -10,6 +10,7 @@ import pytest
 from gearcity_optimizer.importers.save_db import load_save_game
 from gearcity_optimizer.reports.save_calibration import (
     calibrate_engine_record,
+    calibrate_gearbox_record,
     calibrate_save_game,
 )
 
@@ -92,7 +93,7 @@ def sample_save_db(tmp_path: Path) -> Path:
                 bore, stroke, DesignPace, CylinderNumberForCalculations
             ) VALUES (
                 707, 0, 'R-204P-343T-G', 1906, 'W', '15', 'Gasoline',
-                'Naturally Aspirated', 'DOHC', 0.388, 0.0, 0.0, 0.3, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,
+                'Naturally Aspirated', 'DOHC', 0.388, 0.0, 0.0, 0.3, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,
                 1.0, 0.0, 0.0, 223, 291, 3000, 500, 10097, 56, 42, 8.78,
                 24.6, 7.3, 50, 26, 123.0, 56.65, 0.318182, 15
             );
@@ -112,6 +113,7 @@ def sample_save_db(tmp_path: Path) -> Path:
                 HiRatio REAL,
                 TorqueInputRatio REAL,
                 MaxTorqueInput INTEGER,
+                ModAmount INTEGER,
                 Tech_Material REAL,
                 Tech_Parts REAL,
                 Tech_Techniques REAL,
@@ -119,6 +121,7 @@ def sample_save_db(tmp_path: Path) -> Path:
                 de_performance REAL,
                 de_fuel REAL,
                 de_depend REAL,
+                de_comfort REAL,
                 PowerRating REAL,
                 FuelRating REAL,
                 PerformanceRating REAL,
@@ -136,15 +139,15 @@ def sample_save_db(tmp_path: Path) -> Path:
             INSERT INTO GearboxInfo (
                 Gearbox_ID, Company_ID, Name, YearBuilt, Gears, GearboxType,
                 Reverse, Overdrive, Limited, Transaxle, LoRatio, HiRatio,
-                MaxTorqueInput, Tech_Material, Tech_Parts, Tech_Techniques, Tech_Tech,
-                de_performance, de_fuel, de_depend, PowerRating, FuelRating,
+                TorqueInputRatio, MaxTorqueInput, ModAmount, Tech_Material, Tech_Parts, Tech_Techniques, Tech_Tech,
+                de_performance, de_fuel, de_depend, de_comfort, PowerRating, FuelRating,
                 PerformanceRating, ReliabiltyRating, OverallRating, Weight,
                 GB_Weight, GB_Complexity, GB_Smoothness, GB_Comfort, GB_Fuel,
                 GB_Performance, DesignPace
             ) VALUES (
                 289, 0, 'R-341T-NS7', 1906, 7, 'Non-Synchronous',
-                1, 0, 0, 0, 0.0, 0.0, 312, 0.3, 0.3, 0.3, 0.3,
-                0.5, 0.35, 0.4, 17.0, 50.0, 50.0, 50.0, 50.0, 179,
+                1, 0, 0, 0, 0.0, 0.0, 1.0, 312, 2, 0.3, 0.3, 0.3, 0.3,
+                0.5, 0.35, 0.4, 0.3, 17.0, 50.0, 50.0, 50.0, 50.0, 179,
                 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.5
             );
             """
@@ -175,6 +178,8 @@ def test_calibrate_engine_produces_metric_deltas(sample_save_db: Path):
     assert metrics["length_in"].abs_error < 5.0
     assert metrics["width_in"].abs_error < 5.0
     assert metrics["torque_lbft"].abs_error < 20.0
+    assert metrics["horsepower"].pct_error is not None
+    assert metrics["horsepower"].pct_error < 12.0
 
 
 def test_calibrate_save_game_report(sample_save_db: Path):
@@ -182,3 +187,12 @@ def test_calibrate_save_game_report(sample_save_db: Path):
     assert len(report.engines) == 1
     assert len(report.gearboxes) == 1
     assert "length_in_mean_abs_error" in report.engine_summary
+
+
+def test_calibrate_gearbox_matches_save_max_torque(sample_save_db: Path):
+    snapshot = load_save_game(sample_save_db, company_id=0)
+    gearbox = snapshot.gearboxes[0]
+    result = calibrate_gearbox_record(gearbox)
+    torque_delta = next(item for item in result.deltas if item.metric == "max_torque_lbft")
+    assert torque_delta.pct_error is not None
+    assert torque_delta.pct_error < 5.0
