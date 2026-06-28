@@ -522,3 +522,141 @@ def render_save_calibration_tab() -> None:
                     mime="text/csv",
                     key="download_validation_metrics",
                 )
+
+    st.markdown("---")
+    st.markdown("### Calibration policy")
+    st.caption(
+        "Use holdout validation results to gate save calibration per metric. "
+        "Calibration is enabled only where validation status is improved."
+    )
+    from gearcity_optimizer.prediction.calibration_policy import (
+        build_calibration_policy,
+        default_calibration_policy_dir,
+        default_validation_dir,
+        export_calibration_policy,
+        load_calibration_policy,
+    )
+
+    policy_validation_dir = st.text_input(
+        "Validation output directory",
+        value=str(default_validation_dir()),
+        key="calibration_policy_validation_dir",
+    )
+    policy_output_dir = st.text_input(
+        "Policy export directory (optional)",
+        value=str(default_calibration_policy_dir()),
+        key="calibration_policy_output_dir",
+    )
+    build_policy = st.button(
+        "Build calibration policy",
+        type="secondary",
+        key="calibration_policy_build",
+    )
+    if build_policy:
+        try:
+            validation_path = Path(policy_validation_dir)
+            if not validation_path.is_dir():
+                st.warning(f"Validation directory not found: {validation_path}")
+            else:
+                policy = build_calibration_policy(validation_path)
+                export_calibration_policy(policy, policy_output_dir)
+                st.success(f"Calibration policy built from `{validation_path}`.")
+                st.session_state["calibration_policy"] = policy
+        except Exception as exc:  # pragma: no cover
+            st.error(f"Failed to build calibration policy: {exc}")
+
+    policy = st.session_state.get("calibration_policy")
+    if policy is None:
+        policy_json = Path(policy_output_dir) / "calibration_policy.json"
+        if policy_json.is_file():
+            try:
+                policy = load_calibration_policy(policy_json)
+                st.session_state["calibration_policy"] = policy
+            except Exception:
+                policy = None
+    if policy is None:
+        validation_path = Path(policy_validation_dir)
+        metric_csv = validation_path / "validation_metric_comparison.csv"
+        if metric_csv.is_file():
+            try:
+                policy = build_calibration_policy(validation_path)
+                st.session_state["calibration_policy"] = policy
+            except Exception:
+                policy = None
+
+    if policy is None:
+        st.info(
+            "Run holdout validation or point to a directory with "
+            "`validation_metric_comparison.csv` to review the calibration policy."
+        )
+    else:
+        enabled_rows = [row for row in policy.metric_rows if row.calibration_enabled]
+        disabled_rows = [row for row in policy.metric_rows if not row.calibration_enabled]
+        st.markdown(
+            f"**Policy mode:** `{policy.mode.value}`  \n"
+            f"**Validation source:** `{policy.validation_dir or policy_validation_dir}`  \n"
+            f"**Calibration enabled:** {len(enabled_rows)} metrics  \n"
+            f"**Formula-only (safer):** {len(disabled_rows)} metrics"
+        )
+        col_enabled, col_disabled = st.columns(2)
+        enabled_df = pd.DataFrame(
+            [
+                {
+                    "Kind": row.kind,
+                    "Metric": row.metric,
+                    "Status": row.validation_status,
+                    "Reason": row.reason,
+                    "Samples": row.sample_count,
+                    "Improvement %": row.improvement_pct,
+                }
+                for row in enabled_rows
+            ]
+        )
+        disabled_df = pd.DataFrame(
+            [
+                {
+                    "Kind": row.kind,
+                    "Metric": row.metric,
+                    "Status": row.validation_status,
+                    "Reason": row.reason,
+                    "Samples": row.sample_count,
+                    "Improvement %": row.improvement_pct,
+                }
+                for row in disabled_rows
+            ]
+        )
+        with col_enabled:
+            st.markdown("**Metrics with calibration enabled**")
+            if enabled_df.empty:
+                st.write("None")
+            else:
+                st.dataframe(enabled_df, use_container_width=True, hide_index=True)
+        with col_disabled:
+            st.markdown("**Metrics where formula-only is safer**")
+            if disabled_df.empty:
+                st.write("None")
+            else:
+                st.dataframe(disabled_df, use_container_width=True, hide_index=True)
+        if policy.group_rows:
+            st.markdown("**Group-level rules**")
+            st.dataframe(
+                pd.DataFrame(
+                    [
+                        {
+                            "Kind": row.kind,
+                            "Metric": row.metric,
+                            "Year band": row.year_band,
+                            "Layout": row.layout,
+                            "Fuel": row.fuel_type,
+                            "Gearbox type": row.gearbox_type,
+                            "Status": row.validation_status,
+                            "Enabled": row.calibration_enabled,
+                            "Samples": row.sample_count,
+                            "Improvement %": row.improvement_pct,
+                        }
+                        for row in policy.group_rows
+                    ]
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )

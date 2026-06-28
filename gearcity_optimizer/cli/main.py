@@ -178,6 +178,7 @@ SUBCOMMANDS = {
     "build-save-datasets",
     "save-dataset-quality",
     "validate-save-calibration",
+    "build-calibration-policy",
 }
 
 UNKNOWN_SUBCOMMAND = "__unknown__"
@@ -1062,6 +1063,28 @@ def handle_inspect_save(args: argparse.Namespace) -> int:
 
     report = inspect_save_schema(args.save, sample_limit=args.sample_rows)
     print(format_save_schema_report(report))
+    return 0
+
+
+def handle_build_calibration_policy(args: argparse.Namespace) -> int:
+    """Build validation-gated calibration policy from holdout validation artifacts."""
+    from gearcity_optimizer.prediction.calibration_policy import (
+        build_calibration_policy,
+        export_calibration_policy,
+        format_calibration_policy_summary,
+    )
+
+    policy = build_calibration_policy(
+        args.validation,
+        mode=args.mode,
+        min_group_samples=args.min_group_samples,
+    )
+    paths = export_calibration_policy(policy, args.output)
+    for line in format_calibration_policy_summary(policy):
+        print(line)
+    print("\nWrote calibration policy artifacts:")
+    for key, path in sorted(paths.items()):
+        print(f"  {key}: {path}")
     return 0
 
 
@@ -2518,6 +2541,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="Minimum train rows per segment before fitting a correction (default: 3)",
     )
 
+    build_calibration_policy_parser = subparsers.add_parser(
+        "build-calibration-policy",
+        help="Build validation-gated calibration policy from holdout validation output",
+    )
+    build_calibration_policy_parser.add_argument(
+        "--validation",
+        required=True,
+        help="Directory containing validation_metric_comparison.csv",
+    )
+    build_calibration_policy_parser.add_argument(
+        "--output",
+        required=True,
+        help="Directory for calibration_policy.json and CSV exports",
+    )
+    build_calibration_policy_parser.add_argument(
+        "--mode",
+        default="validation_gated",
+        choices=["always_formula_only", "always_save_calibrated", "validation_gated"],
+        help="Policy mode (default: validation_gated)",
+    )
+    build_calibration_policy_parser.add_argument(
+        "--min-group-samples",
+        type=int,
+        default=3,
+        help="Minimum group sample count before using group-level gating (default: 3)",
+    )
+
     group_vehicle_types_parser = subparsers.add_parser(
         "group-vehicle-types",
         help="Cluster vehicle types by similar design-stat priorities",
@@ -2587,6 +2637,7 @@ def build_parser() -> argparse.ArgumentParser:
         "build_save_datasets": build_save_datasets_parser,
         "save_dataset_quality": save_dataset_quality_parser,
         "validate_save_calibration": validate_save_calibration_parser,
+        "build_calibration_policy": build_calibration_policy_parser,
         "group_vehicle_types": group_vehicle_types_parser,
     }
     return parser
@@ -2633,6 +2684,7 @@ def main(argv: list[str] | None = None) -> int:
     build_save_datasets_parser = cli_parsers["build_save_datasets"]
     save_dataset_quality_parser = cli_parsers["save_dataset_quality"]
     validate_save_calibration_parser = cli_parsers["validate_save_calibration"]
+    build_calibration_policy_parser = cli_parsers["build_calibration_policy"]
     group_vehicle_types_parser = cli_parsers["group_vehicle_types"]
 
     if subcommand == UNKNOWN_SUBCOMMAND:
@@ -2826,6 +2878,11 @@ def main(argv: list[str] | None = None) -> int:
         validate_save_calibration_parser.set_defaults(func=handle_validate_save_calibration)
         args = validate_save_calibration_parser.parse_args(remaining)
         return handle_validate_save_calibration(args)
+
+    if subcommand == "build-calibration-policy":
+        build_calibration_policy_parser.set_defaults(func=handle_build_calibration_policy)
+        args = build_calibration_policy_parser.parse_args(remaining)
+        return handle_build_calibration_policy(args)
 
     parser.print_help()
     return 1
