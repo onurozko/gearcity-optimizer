@@ -10,7 +10,13 @@ from typing import Any
 import pandas as pd
 
 from gearcity_optimizer.importers.save_db import SaveEngineRecord, SaveGearboxRecord
-from gearcity_optimizer.prediction.backend import SaveEnginePrediction, SaveGearboxPrediction, SavePredictionBackend
+from gearcity_optimizer.prediction.backend import SavePredictionBackend
+from gearcity_optimizer.prediction.replay_values import (
+    engine_actual_value,
+    engine_predicted_value,
+    gearbox_actual_value,
+    gearbox_predicted_value,
+)
 from gearcity_optimizer.reports.save_calibration import calibrate_save_game
 from gearcity_optimizer.reports.save_calibration_dataset import build_calibration_frames
 from gearcity_optimizer.reports.save_dataset_residuals import (
@@ -42,6 +48,11 @@ class HoldoutValidationResult:
     best_improvements: pd.DataFrame
     group_comparison: pd.DataFrame
     fallback_count: int
+    split_mode: str | None = None
+    split_ratio: float | None = None
+    seed: int | None = None
+    duplicates_removed: int = 0
+    skipped_design_count: int = 0
 
 
 def collect_save_paths(
@@ -75,69 +86,10 @@ def collect_save_paths(
     return paths
 
 
-def engine_actual_value(record: SaveEngineRecord, metric: str) -> float:
-    mapping = {
-        "length": record.length_in,
-        "width": record.width_in,
-        "weight": record.weight_lb,
-        "torque": record.torque_lbft,
-        "horsepower": record.horsepower,
-        "power_rating": record.engine_power_rating,
-        "fuel_rating": record.engine_fuel_rating,
-        "reliability_rating": record.engine_reliability_rating,
-        "overall_rating": record.overall_rating,
-    }
-    return float(mapping[metric])
-
-
-def engine_predicted_value(prediction: SaveEnginePrediction, metric: str) -> float:
-    result = prediction.predicted
-    mapping = {
-        "length": result.length,
-        "width": result.width,
-        "weight": result.weight,
-        "torque": result.torque,
-        "horsepower": result.horsepower,
-        "power_rating": result.performance_rating,
-        "fuel_rating": result.fuel_economy,
-        "reliability_rating": result.reliability_rating,
-        "overall_rating": result.overall_rating,
-    }
-    return float(mapping[metric])
-
-
-def gearbox_actual_value(record: SaveGearboxRecord, metric: str) -> float:
-    mapping = {
-        "max_torque": record.max_torque_input_lbft,
-        "weight": record.weight_lb,
-        "power_rating": record.power_rating,
-        "fuel_rating": record.fuel_rating,
-        "performance_rating": record.performance_rating,
-        "reliability_rating": record.reliability_rating,
-        "overall_rating": record.overall_rating,
-    }
-    return float(mapping[metric])
-
-
-def gearbox_predicted_value(prediction: SaveGearboxPrediction, metric: str) -> float:
-    result = prediction.predicted
-    if metric == "max_torque":
-        return float(prediction.max_torque_support)
-    mapping = {
-        "weight": result.weight,
-        "power_rating": result.power_rating,
-        "fuel_rating": result.fuel_economy_rating,
-        "performance_rating": result.performance_rating,
-        "reliability_rating": result.reliability_rating,
-        "overall_rating": result.overall_rating,
-    }
-    return float(mapping[metric])
-
-
 def build_train_correction_store(
     train_paths: list[str | Path],
     *,
-    company_id: int | None = 0,
+    company_id: int | None = None,
     min_count: int = 3,
 ) -> tuple[ResidualCorrectionStore, pd.DataFrame, pd.DataFrame]:
     """Build residual corrections from train saves only."""
@@ -165,11 +117,225 @@ def build_train_correction_store(
     return ResidualCorrectionStore(engine_corr, gearbox_corr), engine_df, gearbox_df
 
 
+def build_correction_store_from_frames(
+    train_engine_df: pd.DataFrame,
+    train_gearbox_df: pd.DataFrame,
+    *,
+    min_count: int = 3,
+) -> ResidualCorrectionStore:
+    """Build residual corrections from pre-split train dataset rows only."""
+    engine_corr, gearbox_corr = build_residual_correction_tables(
+        train_engine_df,
+        train_gearbox_df,
+        min_count=min_count,
+    )
+    return ResidualCorrectionStore(engine_corr, gearbox_corr)
+
+
+def _test_design_lookup(
+    test_engine_df: pd.DataFrame,
+    test_gearbox_df: pd.DataFrame,
+) -> set[tuple[str, str, int]]:
+    """Build (save, kind, design_id) keys for held-out test rows."""
+    keys: set[tuple[str, str, int]] = set()
+    if not test_engine_df.empty:
+        for row in test_engine_df.itertuples(index=False):
+            keys.add((str(row.save), "engine", int(row.design_id)))
+    if not test_gearbox_df.empty:
+        for row in test_gearbox_df.itertuples(index=False):
+            keys.add((str(row.save), "gearbox", int(row.design_id)))
+    return keys
+
+
+def evaluate_holdout_predictions_for_rows(
+    reports: list,
+    save_labels: list[str],
+    test_engine_df: pd.DataFrame,
+    test_gearbox_df: pd.DataFrame,
+    *,
+    residual_store: ResidualCorrectionStore,
+) -> tuple[pd.DataFrame, int]:
+    """Evaluate predictions on explicit held-out test dataset rows."""
+    from gearcity_optimizer.reports.save_calibration import SaveCalibrationReport
+
+    formula_backend = SavePredictionBackend.formula_only()
+    calibrated_backend = SavePredictionBackend.holdout_calibrated(
+        residual_store=residual_store
+    )
+    test_keys = _test_design_lookup(test_engine_df, test_gearbox_df)
+    label_to_report = {
+        label: report for label, report in zip(save_labels, reports, strict=True)
+    }
+
+    rows: list[dict[str, object]] = []
+    fallback_count = 0
+
+    for save_label, report in label_to_report.items():
+        if not isinstance(report, SaveCalibrationReport):
+            continue
+        for item in report.engines:
+            record = item.record
+            key = (save_label, "engine", record.engine_id)
+            if key not in test_keys:
+                continue
+            formula_pred = formula_backend.predict_engine(record, item.layout)
+            calibrated_pred = calibrated_backend.predict_engine(record, item.layout)
+            if not calibrated_pred.corrections_applied:
+                fallback_count += 1
+            for metric in engine_replay_metric_names():
+                actual = engine_actual_value(record, metric)
+                formula_value = engine_predicted_value(formula_pred, metric)
+                calibrated_value = engine_predicted_value(calibrated_pred, metric)
+                rows.append(
+                    _eval_row(
+                        save=save_label,
+                        kind="engine",
+                        design_id=record.engine_id,
+                        name=record.name,
+                        year=record.year_built,
+                        layout=record.layout,
+                        fuel_type=record.fuel_type,
+                        gearbox_type="",
+                        metric=metric,
+                        actual=actual,
+                        formula_only=formula_value,
+                        save_calibrated=calibrated_value,
+                        correction_applied=calibrated_pred.corrections_applied,
+                        matched_segment=calibrated_pred.matched_segment,
+                        confidence=calibrated_pred.confidence,
+                    )
+                )
+
+        for item in report.gearboxes:
+            record = item.record
+            key = (save_label, "gearbox", record.gearbox_id)
+            if key not in test_keys:
+                continue
+            formula_pred = formula_backend.predict_gearbox(record)
+            calibrated_pred = calibrated_backend.predict_gearbox(record)
+            if not calibrated_pred.corrections_applied:
+                fallback_count += 1
+            for metric in gearbox_replay_metric_names():
+                actual = gearbox_actual_value(record, metric)
+                formula_value = gearbox_predicted_value(formula_pred, metric)
+                calibrated_value = gearbox_predicted_value(calibrated_pred, metric)
+                rows.append(
+                    _eval_row(
+                        save=save_label,
+                        kind="gearbox",
+                        design_id=record.gearbox_id,
+                        name=record.name,
+                        year=record.year_built,
+                        layout="",
+                        fuel_type="",
+                        gearbox_type=record.gearbox_type,
+                        metric=metric,
+                        actual=actual,
+                        formula_only=formula_value,
+                        save_calibrated=calibrated_value,
+                        correction_applied=calibrated_pred.corrections_applied,
+                        matched_segment=calibrated_pred.matched_segment,
+                        confidence=calibrated_pred.confidence,
+                    )
+                )
+
+    if not rows:
+        return _empty_eval_frame(), 0
+    return pd.DataFrame(rows), fallback_count
+
+
+def run_row_level_holdout_validation(
+    save_paths: list[str | Path],
+    *,
+    company_id: int | None = None,
+    min_count: int = 3,
+    split_ratio: float = 0.8,
+    seed: int = 42,
+    split_mode: str,
+) -> HoldoutValidationResult:
+    """Fit corrections on train rows and validate on held-out test rows."""
+    from gearcity_optimizer.reports.save_holdout_split import split_design_frames
+
+    if not save_paths:
+        raise ValueError("At least one save path is required.")
+
+    labels = [Path(path).name for path in save_paths]
+    reports = [
+        calibrate_save_game(
+            str(path),
+            company_id=company_id,
+            engine_limit=None,
+            gearbox_limit=None,
+            apply_corrections=False,
+        )
+        for path in save_paths
+    ]
+    engine_df, gearbox_df = build_calibration_frames(
+        reports,
+        save_labels=labels,
+        apply_corrections=False,
+    )
+    if engine_df.empty and gearbox_df.empty:
+        raise ValueError("No engine or gearbox rows extracted for row-level holdout.")
+
+    (
+        train_engine_df,
+        test_engine_df,
+        train_gearbox_df,
+        test_gearbox_df,
+        duplicates_removed,
+        _train_keys,
+        _test_keys,
+    ) = split_design_frames(engine_df, gearbox_df, split_ratio=split_ratio, seed=seed)
+
+    if train_engine_df.empty and train_gearbox_df.empty:
+        raise ValueError("Train split is empty after row-level holdout split.")
+    if test_engine_df.empty and test_gearbox_df.empty:
+        raise ValueError("Test split is empty after row-level holdout split.")
+
+    residual_store = build_correction_store_from_frames(
+        train_engine_df,
+        train_gearbox_df,
+        min_count=min_count,
+    )
+    eval_rows, fallback_count = evaluate_holdout_predictions_for_rows(
+        reports,
+        labels,
+        test_engine_df,
+        test_gearbox_df,
+        residual_store=residual_store,
+    )
+    metric_comparison = compute_metric_comparison(eval_rows)
+    skipped_design_count = sum(len(report.skipped_designs) for report in reports)
+
+    return HoldoutValidationResult(
+        train_saves=tuple(labels),
+        test_saves=tuple(labels),
+        train_engine_rows=len(train_engine_df),
+        train_gearbox_rows=len(train_gearbox_df),
+        test_engine_rows=len(test_engine_df),
+        test_gearbox_rows=len(test_gearbox_df),
+        correction_segments=len(residual_store.engine_corrections)
+        + len(residual_store.gearbox_corrections),
+        eval_rows=eval_rows,
+        metric_comparison=metric_comparison,
+        worst_regressions=worst_regressions(eval_rows),
+        best_improvements=best_improvements(eval_rows),
+        group_comparison=compute_group_comparison(eval_rows),
+        fallback_count=fallback_count,
+        split_mode=split_mode,
+        split_ratio=split_ratio,
+        seed=seed,
+        duplicates_removed=duplicates_removed,
+        skipped_design_count=skipped_design_count,
+    )
+
+
 def evaluate_holdout_predictions(
     test_paths: list[str | Path],
     *,
     residual_store: ResidualCorrectionStore,
-    company_id: int | None = 0,
+    company_id: int | None = None,
 ) -> tuple[pd.DataFrame, int]:
     """Run formula-only and train-calibrated predictions on held-out test saves."""
     formula_backend = SavePredictionBackend.formula_only()
@@ -362,9 +528,12 @@ def compute_metric_comparison(eval_rows: pd.DataFrame) -> pd.DataFrame:
     if eval_rows.empty:
         return pd.DataFrame(
             columns=[
+                "component",
                 "kind",
                 "metric",
                 "sample_count",
+                "test_design_count",
+                "validation_eval_row_count",
                 "formula_only_mae",
                 "save_calibrated_mae",
                 "formula_only_mape",
@@ -378,6 +547,10 @@ def compute_metric_comparison(eval_rows: pd.DataFrame) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
     for (kind, metric), frame in eval_rows.groupby(["kind", "metric"], dropna=False):
         sample_count = len(frame)
+        if {"save", "design_id"}.issubset(frame.columns):
+            test_design_count = int(frame[["save", "design_id"]].drop_duplicates().shape[0])
+        else:
+            test_design_count = sample_count
         formula_only_mae = float(frame["formula_only_abs_error"].mean())
         save_calibrated_mae = float(frame["save_calibrated_abs_error"].mean())
         formula_only_mape = _mean_pct(frame["formula_only_pct_error"])
@@ -390,9 +563,12 @@ def compute_metric_comparison(eval_rows: pd.DataFrame) -> pd.DataFrame:
         )
         rows.append(
             {
+                "component": kind,
                 "kind": kind,
                 "metric": metric,
                 "sample_count": sample_count,
+                "test_design_count": test_design_count,
+                "validation_eval_row_count": sample_count,
                 "formula_only_mae": formula_only_mae,
                 "save_calibrated_mae": save_calibrated_mae,
                 "formula_only_mape": formula_only_mape,
@@ -437,6 +613,7 @@ def compute_group_comparison(eval_rows: pd.DataFrame) -> pd.DataFrame:
     if eval_rows.empty:
         return pd.DataFrame(
             columns=[
+                "component",
                 "kind",
                 "metric",
                 "year_band",
@@ -444,6 +621,8 @@ def compute_group_comparison(eval_rows: pd.DataFrame) -> pd.DataFrame:
                 "fuel_type",
                 "gearbox_type",
                 "sample_count",
+                "test_design_count",
+                "validation_eval_row_count",
                 "formula_only_mae",
                 "save_calibrated_mae",
                 "absolute_improvement",
@@ -476,8 +655,9 @@ def compute_group_comparison(eval_rows: pd.DataFrame) -> pd.DataFrame:
 
 
 def _group_metric_frame(frame: pd.DataFrame, group_cols: list[str]) -> pd.DataFrame:
+    group_keys = ["metric", *group_cols]
     grouped = (
-        frame.groupby(["metric", *group_cols], dropna=False)
+        frame.groupby(group_keys, dropna=False)
         .agg(
             sample_count=("actual", "count"),
             formula_only_mae=("formula_only_abs_error", "mean"),
@@ -485,6 +665,13 @@ def _group_metric_frame(frame: pd.DataFrame, group_cols: list[str]) -> pd.DataFr
         )
         .reset_index()
     )
+    design_counts = (
+        frame.groupby(group_keys, dropna=False)[["save", "design_id"]]
+        .apply(lambda part: int(part.drop_duplicates().shape[0]))
+        .reset_index(name="test_design_count")
+    )
+    grouped = grouped.merge(design_counts, on=group_keys, how="left")
+    grouped["validation_eval_row_count"] = grouped["sample_count"]
     grouped["absolute_improvement"] = (
         grouped["formula_only_mae"] - grouped["save_calibrated_mae"]
     )
@@ -497,6 +684,7 @@ def _group_metric_frame(frame: pd.DataFrame, group_cols: list[str]) -> pd.DataFr
         axis=1,
     )
     grouped["kind"] = frame["kind"].iloc[0]
+    grouped["component"] = grouped["kind"]
     for col in ("layout", "fuel_type", "gearbox_type"):
         if col not in grouped.columns:
             grouped[col] = ""
@@ -507,7 +695,7 @@ def run_holdout_validation(
     train_paths: list[str | Path],
     test_paths: list[str | Path],
     *,
-    company_id: int | None = 0,
+    company_id: int | None = None,
     min_count: int = 3,
 ) -> HoldoutValidationResult:
     """Run the full train/test holdout validation workflow."""
@@ -576,6 +764,11 @@ def export_holdout_validation(
         "test_gearbox_rows": result.test_gearbox_rows,
         "correction_segments": result.correction_segments,
         "fallback_count": result.fallback_count,
+        "split_mode": result.split_mode,
+        "split_ratio": result.split_ratio,
+        "seed": result.seed,
+        "duplicates_removed": result.duplicates_removed,
+        "skipped_design_count": result.skipped_design_count,
         "metrics_improved": int((result.metric_comparison["status"] == "improved").sum())
         if not result.metric_comparison.empty
         else 0,
@@ -584,6 +777,9 @@ def export_holdout_validation(
         else 0,
         "metrics_unchanged": int((result.metric_comparison["status"] == "unchanged").sum())
         if not result.metric_comparison.empty
+        else 0,
+        "groups_improved": int((result.group_comparison["status"] == "improved").sum())
+        if not result.group_comparison.empty
         else 0,
     }
     paths = {

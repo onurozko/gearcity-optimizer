@@ -60,6 +60,17 @@ class GearboxCalibrationResult:
 
 
 @dataclass(frozen=True)
+class SkippedDesign:
+    """One engine or gearbox row that could not be replayed through wiki formulas."""
+
+    kind: str
+    design_id: int
+    company_id: int
+    name: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class SaveCalibrationReport:
     """Aggregate calibration output for a save file."""
 
@@ -68,6 +79,7 @@ class SaveCalibrationReport:
     gearboxes: tuple[GearboxCalibrationResult, ...]
     engine_summary: dict[str, float]
     gearbox_summary: dict[str, float]
+    skipped_designs: tuple[SkippedDesign, ...] = ()
 
 
 def _delta(metric: str, game_value: float, predicted_value: float) -> MetricDelta:
@@ -428,10 +440,25 @@ def _summary_for_deltas(
     return summary
 
 
+def _skip_design(
+    kind: str,
+    record: SaveEngineRecord | SaveGearboxRecord,
+    exc: Exception,
+) -> SkippedDesign:
+    design_id = record.engine_id if kind == "engine" else record.gearbox_id
+    return SkippedDesign(
+        kind=kind,
+        design_id=design_id,
+        company_id=record.company_id,
+        name=record.name,
+        reason=str(exc),
+    )
+
+
 def calibrate_save_game(
     path: str,
     *,
-    company_id: int | None = 0,
+    company_id: int | None = None,
     engine_limit: int | None = 25,
     gearbox_limit: int | None = 25,
     engine_ids: set[int] | None = None,
@@ -456,17 +483,27 @@ def calibrate_save_game(
     if gearbox_limit is not None:
         gearbox_rows = gearbox_rows[:gearbox_limit]
 
-    engine_results = tuple(
-        calibrate_engine_record(
-            row,
-            snapshot.layouts.get(row.layout),
-            corrections=corrections,
-        )
-        for row in engine_rows
-    )
-    gearbox_results = tuple(
-        calibrate_gearbox_record(row, corrections=corrections) for row in gearbox_rows
-    )
+    engine_results: list[EngineCalibrationResult] = []
+    gearbox_results: list[GearboxCalibrationResult] = []
+    skipped_designs: list[SkippedDesign] = []
+
+    for row in engine_rows:
+        try:
+            engine_results.append(
+                calibrate_engine_record(
+                    row,
+                    snapshot.layouts.get(row.layout),
+                    corrections=corrections,
+                )
+            )
+        except (ValueError, TypeError, KeyError) as exc:
+            skipped_designs.append(_skip_design("engine", row, exc))
+
+    for row in gearbox_rows:
+        try:
+            gearbox_results.append(calibrate_gearbox_record(row, corrections=corrections))
+        except (ValueError, TypeError, KeyError) as exc:
+            skipped_designs.append(_skip_design("gearbox", row, exc))
 
     engine_metrics = (
         "length_in",
@@ -481,8 +518,8 @@ def calibrate_save_game(
 
     return SaveCalibrationReport(
         snapshot=snapshot,
-        engines=engine_results,
-        gearboxes=gearbox_results,
+        engines=tuple(engine_results),
+        gearboxes=tuple(gearbox_results),
         engine_summary=_summary_for_deltas(
             [item.deltas for item in engine_results],
             engine_metrics,
@@ -491,6 +528,7 @@ def calibrate_save_game(
             [item.deltas for item in gearbox_results],
             gearbox_metrics,
         ),
+        skipped_designs=tuple(skipped_designs),
     )
 
 

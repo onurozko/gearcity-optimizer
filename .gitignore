@@ -33,6 +33,9 @@ Thumbs.db
 !tests/fixtures/saves/
 !tests/fixtures/saves/**
 
+# Local train/test holdout layout (real saves; do not commit)
+local_saves/
+
 # Generated project outputs
 generated/
 calibration_fit/

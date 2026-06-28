@@ -75,7 +75,7 @@ class FixBucket:
 def load_reports_from_saves(
     save_paths: list[str],
     *,
-    company_id: int | None = 0,
+    company_id: int | None = None,
     corrections: CalibrationCorrections | None = None,
     apply_corrections: bool = False,
 ) -> list[SaveCalibrationReport]:
@@ -318,7 +318,7 @@ def outlier_designs(
 def run_calibration_research(
     save_paths: list[str],
     *,
-    company_id: int | None = 0,
+    company_id: int | None = None,
     output_dir: str | Path | None = None,
 ) -> dict[str, object]:
     """Run full dataset export and analysis across one or more saves."""
@@ -429,7 +429,7 @@ def format_research_report(
 def run_calibration_fit(
     save_paths: list[str],
     *,
-    company_id: int | None = 0,
+    company_id: int | None = None,
     output_dir: str | Path,
     min_count: int = 2,
     min_abs_signed_pct: float = 5.0,

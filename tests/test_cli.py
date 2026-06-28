@@ -45,6 +45,7 @@ def test_formulas_is_a_known_subcommand():
     assert "build-save-datasets" in SUBCOMMANDS
     assert "validate-save-calibration" in SUBCOMMANDS
     assert "build-calibration-policy" in SUBCOMMANDS
+    assert "smoke-test-saves" in SUBCOMMANDS
     assert "design-checklist" in SUBCOMMANDS
     assert "priorities" in SUBCOMMANDS
     assert "calc-gearboxes" in SUBCOMMANDS

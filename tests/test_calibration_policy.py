@@ -16,6 +16,7 @@ from gearcity_optimizer.prediction.calibration_policy import (
     export_calibration_policy,
     load_calibration_policy,
     select_metric_prediction,
+    summarize_calibration_policy,
 )
 
 
@@ -355,3 +356,94 @@ def test_gated_prediction_service_uses_policy_per_metric(validation_dir: Path, s
             assert decision.selected_mode == "save_calibrated"
         elif decision.validation_status in {"worse", "unchanged", "insufficient_data"}:
             assert decision.selected_mode == "formula_only"
+
+
+def test_group_policy_label_and_min_count_enforcement(validation_dir: Path, tmp_path: Path):
+    _write_group_comparison(
+        validation_dir / "validation_group_comparison.csv",
+        [
+            {
+                "kind": "engine",
+                "metric": "horsepower",
+                "year_band": "1900-1909",
+                "layout": "V8",
+                "fuel_type": "Gasoline",
+                "gearbox_type": "",
+                "sample_count": 1,
+                "formula_only_mae": 1.0,
+                "save_calibrated_mae": 0.5,
+                "absolute_improvement": 0.5,
+                "status": "improved",
+            },
+            {
+                "kind": "engine",
+                "metric": "torque",
+                "year_band": "1900-1909",
+                "layout": "I4",
+                "fuel_type": "",
+                "gearbox_type": "",
+                "sample_count": 1,
+                "formula_only_mae": 1.0,
+                "save_calibrated_mae": 0.5,
+                "absolute_improvement": 0.5,
+                "status": "improved",
+            },
+            {
+                "kind": "engine",
+                "metric": "horsepower",
+                "year_band": "1900-1909",
+                "layout": "",
+                "fuel_type": "",
+                "gearbox_type": "",
+                "sample_count": 10,
+                "formula_only_mae": 5.0,
+                "save_calibrated_mae": 3.0,
+                "absolute_improvement": 2.0,
+                "status": "improved",
+            },
+        ],
+    )
+    policy = build_calibration_policy(validation_dir, min_group_samples=3)
+    counts = summarize_calibration_policy(policy)
+
+    assert counts.enabled_group_rules_below_min_count == 0
+    assert counts.group_rules_below_min_count == 2
+
+    low_hp = next(
+        row for row in policy.group_rows if row.sample_count == 1 and row.metric == "horsepower"
+    )
+    assert low_hp.selected_mode == "metric_fallback"
+    assert low_hp.reason == "Group sample_count below min_count; using metric-level fallback"
+    assert (
+        low_hp.group_label
+        == "component=engine | metric=horsepower | year_band=1900-1909 | layout=V8 | fuel_type=Gasoline"
+    )
+
+    low_torque = next(
+        row for row in policy.group_rows if row.sample_count == 1 and row.metric == "torque"
+    )
+    assert low_torque.selected_mode == "formula_only"
+    assert low_torque.reason == "Group sample_count below min_count; using formula-only"
+
+    high_hp = next(row for row in policy.group_rows if row.sample_count == 10)
+    assert high_hp.selected_mode == "save_calibrated"
+
+    for row in policy.group_rows:
+        assert row.group_label.strip() != ""
+
+    out = tmp_path / "policy"
+    paths = export_calibration_policy(policy, out)
+    groups_csv = pd.read_csv(paths["calibration_policy_groups"])
+    for column in (
+        "group_label",
+        "year_band",
+        "layout",
+        "fuel_type",
+        "gearbox_type",
+    ):
+        assert column in groups_csv.columns
+    assert (groups_csv["group_label"].astype(str).str.strip() != "").all()
+    below_min_enabled = groups_csv[
+        (groups_csv["sample_count"] < 3) & (groups_csv["selected_mode"] == "save_calibrated")
+    ]
+    assert below_min_enabled.empty

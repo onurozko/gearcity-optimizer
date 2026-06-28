@@ -146,6 +146,7 @@ ENGINE_DATASET_META_COLUMNS: tuple[str, ...] = (
     "save",
     "kind",
     "design_id",
+    "company_id",
     "name",
     "fuel_family",
     "valve_family",
@@ -159,6 +160,7 @@ GEARBOX_DATASET_META_COLUMNS: tuple[str, ...] = (
     "save",
     "kind",
     "design_id",
+    "company_id",
     "name",
     "mod_amount",
     "mod_bucket",
@@ -307,6 +309,7 @@ def engine_rows_from_report(
                 "save": label,
                 "kind": "engine",
                 "design_id": record.engine_id,
+                "company_id": record.company_id,
                 "name": record.name,
                 "year": record.year_built,
                 "layout": record.layout,
@@ -415,6 +418,7 @@ def gearbox_rows_from_report(
                 "save": label,
                 "kind": "gearbox",
                 "design_id": record.gearbox_id,
+                "company_id": record.company_id,
                 "name": record.name,
                 "year": record.year_built,
                 "gears": record.gears,
@@ -578,7 +582,7 @@ def schema_summaries_for_saves(save_paths: list[str | Path]) -> list[SaveSchemaR
 def build_save_dataset_pipeline(
     save_paths: list[str | Path],
     *,
-    company_id: int | None = 0,
+    company_id: int | None = None,
     output_dir: str | Path | None = None,
     apply_corrections: bool = True,
     min_correction_count: int = 3,
@@ -661,6 +665,27 @@ def build_save_dataset_pipeline(
     )
     paths.update(export_dataset_quality_report(quality_report, out))
 
+    skipped_rows = [
+        {
+            "save": labels[index],
+            "kind": item.kind,
+            "design_id": item.design_id,
+            "company_id": item.company_id,
+            "name": item.name,
+            "reason": item.reason,
+        }
+        for index, report in enumerate(reports)
+        for item in report.skipped_designs
+    ]
+    skipped_df = pd.DataFrame(
+        skipped_rows,
+        columns=["save", "kind", "design_id", "company_id", "name", "reason"],
+    )
+    paths["skipped_designs"] = out / "skipped_designs.csv"
+    skipped_df.to_csv(paths["skipped_designs"], index=False)
+    skipped_engine_count = int((skipped_df["kind"] == "engine").sum()) if not skipped_df.empty else 0
+    skipped_gearbox_count = int((skipped_df["kind"] == "gearbox").sum()) if not skipped_df.empty else 0
+
     return {
         "reports": reports,
         "schema_reports": schema_reports,
@@ -673,6 +698,9 @@ def build_save_dataset_pipeline(
         "quality_report": quality_report,
         "paths": paths,
         "apply_corrections": apply_corrections,
+        "skipped_design_count": len(skipped_rows),
+        "skipped_engine_count": skipped_engine_count,
+        "skipped_gearbox_count": skipped_gearbox_count,
     }
 
 
@@ -691,6 +719,9 @@ def format_dataset_pipeline_summary(result: dict[str, Any]) -> list[str]:
         "=" * 72,
         f"Engines extracted: {len(engine_df)}",
         f"Gearboxes extracted: {len(gearbox_df)}",
+        f"Skipped designs: {result.get('skipped_design_count', 0)} "
+        f"(engines: {result.get('skipped_engine_count', 0)}, "
+        f"gearboxes: {result.get('skipped_gearbox_count', 0)})",
         f"Calibration mode: {'save_calibrated' if result['apply_corrections'] else 'formula_only'}",
         "",
         "Schema summary:",

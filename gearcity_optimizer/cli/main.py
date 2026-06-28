@@ -179,6 +179,7 @@ SUBCOMMANDS = {
     "save-dataset-quality",
     "validate-save-calibration",
     "build-calibration-policy",
+    "smoke-test-saves",
 }
 
 UNKNOWN_SUBCOMMAND = "__unknown__"
@@ -1063,6 +1064,36 @@ def handle_inspect_save(args: argparse.Namespace) -> int:
 
     report = inspect_save_schema(args.save, sample_limit=args.sample_rows)
     print(format_save_schema_report(report))
+    return 0
+
+
+def handle_smoke_test_saves(args: argparse.Namespace) -> int:
+    """Run end-to-end real-save smoke test workflow."""
+    from gearcity_optimizer.reports.real_save_smoke_test import (
+        RealSaveSmokeTestError,
+        format_real_save_smoke_test_summary,
+        run_real_save_smoke_test,
+    )
+
+    company_id = args.company_id if args.company_id >= 0 else None
+    try:
+        result = run_real_save_smoke_test(
+            train_dir=args.train_dir,
+            test_dir=args.test_dir,
+            save=args.save,
+            saves_dir=args.saves_dir,
+            output_dir=args.output,
+            company_id=company_id,
+            min_count=args.min_count,
+            split_ratio=args.split_ratio,
+            seed=args.seed,
+        )
+    except RealSaveSmokeTestError as exc:
+        raise SystemExit(f"Error: {exc}") from exc
+
+    for line in format_real_save_smoke_test_summary(result):
+        print(line)
+    print(f"\nWrote smoke test summary: {result.artifact_paths['smoke_test_summary']}")
     return 0
 
 
@@ -2327,8 +2358,8 @@ def build_parser() -> argparse.ArgumentParser:
     calibrate_save_parser.add_argument(
         "--company-id",
         type=int,
-        default=0,
-        help="Company_ID to filter (default: 0 player). Use -1 for all companies.",
+        default=-1,
+        help="Company_ID to filter (default: -1 all companies). Use 0 for player only.",
     )
     calibrate_save_parser.add_argument(
         "--limit",
@@ -2390,8 +2421,8 @@ def build_parser() -> argparse.ArgumentParser:
     calibration_research_parser.add_argument(
         "--company-id",
         type=int,
-        default=0,
-        help="Company_ID to filter (default: 0 player). Use -1 for all companies.",
+        default=-1,
+        help="Company_ID to filter (default: -1 all companies). Use 0 for player only.",
     )
     calibration_research_parser.add_argument(
         "--output",
@@ -2412,8 +2443,8 @@ def build_parser() -> argparse.ArgumentParser:
     calibration_fit_parser.add_argument(
         "--company-id",
         type=int,
-        default=0,
-        help="Company_ID to filter (default: 0 player). Use -1 for all companies.",
+        default=-1,
+        help="Company_ID to filter (default: -1 all companies). Use 0 for player only.",
     )
     calibration_fit_parser.add_argument(
         "--output",
@@ -2462,8 +2493,8 @@ def build_parser() -> argparse.ArgumentParser:
     build_save_datasets_parser.add_argument(
         "--company-id",
         type=int,
-        default=0,
-        help="Company_ID to filter (default: 0 player). Use -1 for all companies.",
+        default=-1,
+        help="Company_ID to filter (default: -1 all companies). Use 0 for player only.",
     )
     build_save_datasets_parser.add_argument(
         "--output",
@@ -2531,8 +2562,8 @@ def build_parser() -> argparse.ArgumentParser:
     validate_save_calibration_parser.add_argument(
         "--company-id",
         type=int,
-        default=0,
-        help="Company_ID to filter (default: 0 player). Use -1 for all companies.",
+        default=-1,
+        help="Company_ID to filter (default: -1 all companies). Use 0 for player only.",
     )
     validate_save_calibration_parser.add_argument(
         "--min-count",
@@ -2566,6 +2597,60 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=3,
         help="Minimum group sample count before using group-level gating (default: 3)",
+    )
+
+    smoke_test_saves_parser = subparsers.add_parser(
+        "smoke-test-saves",
+        help="Run full real-save workflow: inspect, datasets, quality, validation, policy",
+    )
+    smoke_test_saves_parser.add_argument(
+        "--save",
+        default=None,
+        help="Single .db save for internal row-level train/test split",
+    )
+    smoke_test_saves_parser.add_argument(
+        "--saves-dir",
+        default=None,
+        help="Directory of .db saves for automatic row-level train/test split",
+    )
+    smoke_test_saves_parser.add_argument(
+        "--train-dir",
+        default=None,
+        help="Directory containing train .db save files (explicit holdout mode)",
+    )
+    smoke_test_saves_parser.add_argument(
+        "--test-dir",
+        default=None,
+        help="Directory containing test .db save files (explicit holdout mode)",
+    )
+    smoke_test_saves_parser.add_argument(
+        "--output",
+        default="generated/real_save_test/",
+        help="Output directory for smoke test artifacts (default: generated/real_save_test/)",
+    )
+    smoke_test_saves_parser.add_argument(
+        "--company-id",
+        type=int,
+        default=-1,
+        help="Company ID to extract from saves (default: -1 all companies, use 0 for player only)",
+    )
+    smoke_test_saves_parser.add_argument(
+        "--min-count",
+        type=int,
+        default=3,
+        help="Minimum train rows per segment before fitting a correction (default: 3)",
+    )
+    smoke_test_saves_parser.add_argument(
+        "--split-ratio",
+        type=float,
+        default=0.8,
+        help="Train fraction for row-level split modes (default: 0.8)",
+    )
+    smoke_test_saves_parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for stable row-level train/test split (default: 42)",
     )
 
     group_vehicle_types_parser = subparsers.add_parser(
@@ -2638,6 +2723,7 @@ def build_parser() -> argparse.ArgumentParser:
         "save_dataset_quality": save_dataset_quality_parser,
         "validate_save_calibration": validate_save_calibration_parser,
         "build_calibration_policy": build_calibration_policy_parser,
+        "smoke_test_saves": smoke_test_saves_parser,
         "group_vehicle_types": group_vehicle_types_parser,
     }
     return parser
@@ -2685,6 +2771,7 @@ def main(argv: list[str] | None = None) -> int:
     save_dataset_quality_parser = cli_parsers["save_dataset_quality"]
     validate_save_calibration_parser = cli_parsers["validate_save_calibration"]
     build_calibration_policy_parser = cli_parsers["build_calibration_policy"]
+    smoke_test_saves_parser = cli_parsers["smoke_test_saves"]
     group_vehicle_types_parser = cli_parsers["group_vehicle_types"]
 
     if subcommand == UNKNOWN_SUBCOMMAND:
@@ -2883,6 +2970,11 @@ def main(argv: list[str] | None = None) -> int:
         build_calibration_policy_parser.set_defaults(func=handle_build_calibration_policy)
         args = build_calibration_policy_parser.parse_args(remaining)
         return handle_build_calibration_policy(args)
+
+    if subcommand == "smoke-test-saves":
+        smoke_test_saves_parser.set_defaults(func=handle_smoke_test_saves)
+        args = smoke_test_saves_parser.parse_args(remaining)
+        return handle_smoke_test_saves(args)
 
     parser.print_help()
     return 1

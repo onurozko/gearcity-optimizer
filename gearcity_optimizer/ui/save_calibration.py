@@ -137,7 +137,7 @@ def render_save_calibration_tab() -> None:
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        company_id = st.number_input("Company ID (-1 for all)", min_value=-1, value=0, step=1)
+        company_id = st.number_input("Company ID (-1 for all)", min_value=-1, value=-1, step=1)
     with col2:
         limit = st.number_input("Max engines/gearboxes each (per save)", min_value=1, value=10, step=1)
     with col3:
