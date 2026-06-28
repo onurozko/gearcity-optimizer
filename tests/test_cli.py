@@ -41,7 +41,9 @@ def test_formulas_is_a_known_subcommand():
     """The formulas command should be registered as a subcommand."""
     assert "formulas" in SUBCOMMANDS
     assert "setup-sources" in SUBCOMMANDS
-    assert "run-app" in SUBCOMMANDS
+    assert "inspect-save" in SUBCOMMANDS
+    assert "build-save-datasets" in SUBCOMMANDS
+    assert "validate-save-calibration" in SUBCOMMANDS
     assert "design-checklist" in SUBCOMMANDS
     assert "priorities" in SUBCOMMANDS
     assert "calc-gearboxes" in SUBCOMMANDS

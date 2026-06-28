@@ -25,9 +25,9 @@ def test_streamlit_tab_list_includes_design_optimizer():
     names = streamlit_tab_names()
     assert "Design Optimizer" in names
     assert "Tech Availability" in names
-    assert "Save Calibration" in names
+    assert "Save Data / Calibration" in names
     assert names.index("Design Optimizer") < names.index("Tech Availability")
-    assert names.index("Save Calibration") > names.index("Wiki / Formula Tools")
+    assert names.index("Save Data / Calibration") > names.index("Wiki / Formula Tools")
     assert names[0] == "Design Checklist"
     assert names[1] == "Component Priorities"
     assert names[2] == "Design Optimizer"

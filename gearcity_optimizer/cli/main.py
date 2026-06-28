@@ -174,6 +174,10 @@ SUBCOMMANDS = {
     "calibrate-save",
     "calibration-research",
     "calibration-fit",
+    "inspect-save",
+    "build-save-datasets",
+    "save-dataset-quality",
+    "validate-save-calibration",
 }
 
 UNKNOWN_SUBCOMMAND = "__unknown__"
@@ -1049,6 +1053,102 @@ def handle_import_components(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_inspect_save(args: argparse.Namespace) -> int:
+    """Inspect tables and columns in a GearCity save database."""
+    from gearcity_optimizer.importers.save_schema import (
+        format_save_schema_report,
+        inspect_save_schema,
+    )
+
+    report = inspect_save_schema(args.save, sample_limit=args.sample_rows)
+    print(format_save_schema_report(report))
+    return 0
+
+
+def handle_validate_save_calibration(args: argparse.Namespace) -> int:
+    """Run holdout validation comparing formula-only vs train-calibrated predictions."""
+    from gearcity_optimizer.reports.save_calibration_validation import (
+        collect_save_paths,
+        export_holdout_validation,
+        format_holdout_validation_summary,
+        run_holdout_validation,
+    )
+
+    company_id = args.company_id if args.company_id >= 0 else None
+    train_paths = collect_save_paths(
+        save_paths=args.train_save,
+        save_dir=args.train_dir,
+    )
+    test_paths = collect_save_paths(
+        save_paths=args.test_save,
+        save_dir=args.test_dir,
+    )
+    if not train_paths:
+        raise SystemExit("Error: provide at least one train save via --train-save or --train-dir.")
+    if not test_paths:
+        raise SystemExit("Error: provide at least one test save via --test-save or --test-dir.")
+
+    result = run_holdout_validation(
+        train_paths,
+        test_paths,
+        company_id=company_id,
+        min_count=args.min_count,
+    )
+    paths = export_holdout_validation(result, args.output)
+    for line in format_holdout_validation_summary(result):
+        print(line)
+    print("\nWrote validation artifacts:")
+    for key, path in sorted(paths.items()):
+        print(f"  {key}: {path}")
+    return 0
+
+
+def handle_save_dataset_quality(args: argparse.Namespace) -> int:
+    """Generate validation and prediction-quality reports from generated datasets."""
+    from gearcity_optimizer.reports.save_dataset_quality import (
+        build_dataset_quality_report,
+        export_dataset_quality_report,
+        format_quality_report_summary,
+    )
+
+    report = build_dataset_quality_report(args.input)
+    output_dir = args.output or args.input
+    paths = export_dataset_quality_report(report, output_dir)
+    for line in format_quality_report_summary(report):
+        print(line)
+    print("\nWrote quality artifacts:")
+    for key, path in sorted(paths.items()):
+        print(f"  {key}: {path}")
+    return 0
+
+
+def handle_build_save_datasets(args: argparse.Namespace) -> int:
+    """Build normalized save calibration datasets with formula replay columns."""
+    from gearcity_optimizer.reports.save_calibration_dataset import (
+        build_save_dataset_pipeline,
+        default_save_datasets_dir,
+        format_dataset_pipeline_summary,
+    )
+
+    company_id = args.company_id if args.company_id >= 0 else None
+    output_dir = args.output or default_save_datasets_dir()
+    result = build_save_dataset_pipeline(
+        args.save,
+        company_id=company_id,
+        output_dir=output_dir,
+        apply_corrections=not args.no_corrections,
+        min_correction_count=args.min_count,
+    )
+
+    for line in format_dataset_pipeline_summary(result):
+        print(line)
+
+    print("\nWrote dataset artifacts:")
+    for key, path in sorted(result["paths"].items()):
+        print(f"  {key}: {path}")
+    return 0
+
+
 def handle_calibrate_save(args: argparse.Namespace) -> int:
     """Compare wiki formula outputs to designs stored in a GearCity save database."""
     from gearcity_optimizer.reports.save_calibration import (
@@ -1406,19 +1506,51 @@ def handle_optimize_design(args: argparse.Namespace) -> int:
     )
 
     print(f"\nDesign optimizer for {args.vehicle_type} ({args.cost_mode})\n")
+    printed_choices = False
     if result.component_choices is not None:
         print("Recommended component choices:\n")
         for recommendation in result.component_choices.choices:
             if recommendation.recommended_choice is None:
                 continue
+            printed_choices = True
             print(
                 f"  [{recommendation.section}] {recommendation.choice_type}: "
                 f"{recommendation.recommended_choice.display_name} "
                 f"({recommendation.confidence})"
             )
             print(f"    reason: {recommendation.reason}")
+
+        if not printed_choices and result.selected_design_choices:
+            print(
+                "  (No high-confidence auto-picks; showing the best complete design "
+                "from global search instead.)\n"
+            )
+            for choice_type, choice in sorted(result.selected_design_choices.items()):
+                print(
+                    f"  [{choice.section}] {choice_type}: "
+                    f"{choice.display_name} ({choice.confidence})"
+                )
+            printed_choices = True
+        elif not printed_choices:
+            for recommendation in result.component_choices.choices:
+                if recommendation.top_candidate is None:
+                    continue
+                printed_choices = True
+                print(
+                    f"  [{recommendation.section}] {recommendation.choice_type}: "
+                    f"{recommendation.top_candidate.display_name} "
+                    f"(top candidate, {recommendation.auto_pick_status})"
+                )
+                print(f"    reason: {recommendation.reason}")
     else:
         print("No component choices available (Components.xml not imported).\n")
+
+    if result.warnings:
+        print("\nNotes:\n")
+        for warning in result.warnings[:8]:
+            print(f"  - {warning}")
+        if len(result.warnings) > 8:
+            print(f"  - ... and {len(result.warnings) - 8} more")
 
     print("\nRecommended slider controls:\n")
     current_section = None
@@ -2278,6 +2410,114 @@ def build_parser() -> argparse.ArgumentParser:
         help="Ignore segment metrics with |signed error| below this pct (default: 5)",
     )
 
+    inspect_save_parser = subparsers.add_parser(
+        "inspect-save",
+        help="Inspect tables, columns, and sample rows in a GearCity .db save",
+    )
+    inspect_save_parser.add_argument(
+        "--save",
+        required=True,
+        help="Path to a GearCity save game .db file",
+    )
+    inspect_save_parser.add_argument(
+        "--sample-rows",
+        type=int,
+        default=3,
+        help="Sample rows to show per table (default: 3)",
+    )
+
+    build_save_datasets_parser = subparsers.add_parser(
+        "build-save-datasets",
+        help="Extract normalized engine/gearbox datasets with formula replay columns",
+    )
+    build_save_datasets_parser.add_argument(
+        "--save",
+        action="append",
+        required=True,
+        help="Path to a GearCity save game .db file (repeatable)",
+    )
+    build_save_datasets_parser.add_argument(
+        "--company-id",
+        type=int,
+        default=0,
+        help="Company_ID to filter (default: 0 player). Use -1 for all companies.",
+    )
+    build_save_datasets_parser.add_argument(
+        "--output",
+        default=None,
+        help="Output directory (default: generated/save_datasets/)",
+    )
+    build_save_datasets_parser.add_argument(
+        "--no-corrections",
+        action="store_true",
+        help="Skip bundled segment corrections when replaying formulas",
+    )
+    build_save_datasets_parser.add_argument(
+        "--min-count",
+        type=int,
+        default=3,
+        help="Minimum rows per segment before suggesting a residual correction (default: 3)",
+    )
+
+    save_dataset_quality_parser = subparsers.add_parser(
+        "save-dataset-quality",
+        help="Build validation and prediction-quality reports from generated save datasets",
+    )
+    save_dataset_quality_parser.add_argument(
+        "--input",
+        required=True,
+        help="Directory containing engines.csv and gearboxes.csv",
+    )
+    save_dataset_quality_parser.add_argument(
+        "--output",
+        default=None,
+        help="Output directory (default: same as --input)",
+    )
+
+    validate_save_calibration_parser = subparsers.add_parser(
+        "validate-save-calibration",
+        help="Holdout validation for save-calibrated predictions on unseen saves",
+    )
+    validate_save_calibration_parser.add_argument(
+        "--train-save",
+        action="append",
+        default=None,
+        help="Train GearCity save .db file (repeatable)",
+    )
+    validate_save_calibration_parser.add_argument(
+        "--test-save",
+        action="append",
+        default=None,
+        help="Test GearCity save .db file (repeatable)",
+    )
+    validate_save_calibration_parser.add_argument(
+        "--train-dir",
+        default=None,
+        help="Directory containing train save .db files",
+    )
+    validate_save_calibration_parser.add_argument(
+        "--test-dir",
+        default=None,
+        help="Directory containing test save .db files",
+    )
+    validate_save_calibration_parser.add_argument(
+        "--output",
+        required=True,
+        help="Directory for validation artifacts",
+    )
+    validate_save_calibration_parser.add_argument(
+        "--company-id",
+        type=int,
+        default=0,
+        help="Company_ID to filter (default: 0 player). Use -1 for all companies.",
+    )
+    validate_save_calibration_parser.add_argument(
+        "--min-count",
+        type=int,
+        default=3,
+        help="Minimum train rows per segment before fitting a correction (default: 3)",
+    )
+
     group_vehicle_types_parser = subparsers.add_parser(
         "group-vehicle-types",
         help="Cluster vehicle types by similar design-stat priorities",
@@ -2343,6 +2583,10 @@ def build_parser() -> argparse.ArgumentParser:
         "calibrate_save": calibrate_save_parser,
         "calibration_research": calibration_research_parser,
         "calibration_fit": calibration_fit_parser,
+        "inspect_save": inspect_save_parser,
+        "build_save_datasets": build_save_datasets_parser,
+        "save_dataset_quality": save_dataset_quality_parser,
+        "validate_save_calibration": validate_save_calibration_parser,
         "group_vehicle_types": group_vehicle_types_parser,
     }
     return parser
@@ -2385,6 +2629,10 @@ def main(argv: list[str] | None = None) -> int:
     calibrate_save_parser = cli_parsers["calibrate_save"]
     calibration_research_parser = cli_parsers["calibration_research"]
     calibration_fit_parser = cli_parsers["calibration_fit"]
+    inspect_save_parser = cli_parsers["inspect_save"]
+    build_save_datasets_parser = cli_parsers["build_save_datasets"]
+    save_dataset_quality_parser = cli_parsers["save_dataset_quality"]
+    validate_save_calibration_parser = cli_parsers["validate_save_calibration"]
     group_vehicle_types_parser = cli_parsers["group_vehicle_types"]
 
     if subcommand == UNKNOWN_SUBCOMMAND:
@@ -2558,6 +2806,26 @@ def main(argv: list[str] | None = None) -> int:
         calibration_fit_parser.set_defaults(func=handle_calibration_fit)
         args = calibration_fit_parser.parse_args(remaining)
         return handle_calibration_fit(args)
+
+    if subcommand == "inspect-save":
+        inspect_save_parser.set_defaults(func=handle_inspect_save)
+        args = inspect_save_parser.parse_args(remaining)
+        return handle_inspect_save(args)
+
+    if subcommand == "build-save-datasets":
+        build_save_datasets_parser.set_defaults(func=handle_build_save_datasets)
+        args = build_save_datasets_parser.parse_args(remaining)
+        return handle_build_save_datasets(args)
+
+    if subcommand == "save-dataset-quality":
+        save_dataset_quality_parser.set_defaults(func=handle_save_dataset_quality)
+        args = save_dataset_quality_parser.parse_args(remaining)
+        return handle_save_dataset_quality(args)
+
+    if subcommand == "validate-save-calibration":
+        validate_save_calibration_parser.set_defaults(func=handle_validate_save_calibration)
+        args = validate_save_calibration_parser.parse_args(remaining)
+        return handle_validate_save_calibration(args)
 
     parser.print_help()
     return 1

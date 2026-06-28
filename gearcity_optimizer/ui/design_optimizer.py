@@ -118,7 +118,7 @@ def streamlit_tab_names() -> list[str]:
         "Historical Events / Timeline",
         "Naming Guide",
         "Wiki / Formula Tools",
-        "Save Calibration",
+        "Save Data / Calibration",
     ]
 
 
